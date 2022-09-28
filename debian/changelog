@@ -1,0 +1,371 @@
+astroid (2.8.4-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/copyright
+    - update upstream copyright info
+  * debian/control
+    - add typing-extensions to Depends; Closes: #997875
+    - bump Standards-Version to 4.6.0.1 (no changes needed)
+
+ -- Sandro Tosi <morph@debian.org>  Tue, 02 Nov 2021 23:42:57 -0400
+
+astroid (2.8.2-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Sandro Tosi <morph@debian.org>  Sat, 09 Oct 2021 20:27:06 -0400
+
+astroid (2.8.1-1) unstable; urgency=medium
+
+  [ Debian Janitor ]
+  * Remove constraints unnecessary since buster:
+    + Build-Depends: Drop versioned constraint on dh-python.
+  * Remove obsolete field Name from debian/upstream/metadata (already present in
+    machine-readable debian/copyright).
+
+  [ Sandro Tosi ]
+  * New upstream release
+  * debian/watch
+    - track GitHub releases
+  * debian/copyright
+    - refresh upstream copyright/license info
+  * debian/control
+    - add typing-extensions to b-d, needed by tests
+
+ -- Sandro Tosi <morph@debian.org>  Thu, 07 Oct 2021 21:47:12 -0400
+
+astroid (2.5.1-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/copyright
+     refresh upstream copyright/license info
+
+ -- Sandro Tosi <morph@debian.org>  Sun, 28 Feb 2021 17:53:31 -0500
+
+astroid (2.5-1) unstable; urgency=medium
+
+  [ Ondřej Nový ]
+  * d/control: Update Vcs-* fields with new Debian Python Team Salsa
+    layout.
+
+  [ Sandro Tosi ]
+  * New upstream release
+  * Use the new Debian Python Team contact name and address
+  * debian/copyright
+    - extend packaging copyright years
+    - refresh upstream copyright/license info
+  * debian/control
+    - bump Standards-Version to 4.5.1 (no changes needed)
+  * debian/watch
+    - bump version to 4
+
+ -- Sandro Tosi <morph@debian.org>  Thu, 18 Feb 2021 23:15:56 -0500
+
+astroid (2.4.2-1) unstable; urgency=medium
+
+  [ Debian Janitor ]
+  * Bump debhelper from old 9 to 12.
+  * Set debhelper-compat version in Build-Depends.
+  * Set upstream metadata fields: Bug-Database, Bug-Submit, Name,
+    Repository, Repository-Browse.
+
+  [ Sandro Tosi ]
+  * New upstream release
+  * debian/copyright
+    - (automatically) update upstream copyright notice
+    - extend packaging copyright years
+  * debian/rules
+    - copy tests from their new location
+    - skip test_oserror test, currently failing, #798
+  * debian/control
+    - bump Standards-Version to 4.5.0 (no changes needed)
+    - run wrap-and-sort
+    - bump compat level to 13
+
+ -- Sandro Tosi <morph@debian.org>  Wed, 15 Jul 2020 23:00:07 -0400
+
+astroid (2.3.3-1) unstable; urgency=medium
+
+  [ Ondřej Nový ]
+  * Bump Standards-Version to 4.4.1.
+
+  [ Sandro Tosi ]
+  * New upstream release; Closes: #944716
+  * debian/control
+    - bump b-d on lazy-object-proxy to >= 1.4.0
+  * debian/copyright
+    - update upstream copyright information
+    - extend packaging copyright years
+
+ -- Sandro Tosi <morph@debian.org>  Wed, 20 Nov 2019 00:08:56 -0500
+
+astroid (2.1.0-2) unstable; urgency=medium
+
+  * debian/{copyright,control}
+    - update project homepage to github; Closes: #917776
+
+ -- Sandro Tosi <morph@debian.org>  Mon, 31 Dec 2018 15:20:41 -0500
+
+astroid (2.1.0-1) unstable; urgency=medium
+
+  [ Ondřej Nový ]
+  * Require newer dh-python which cleans .pytest_cache directory
+  * Revert removing of pytest_cache manually
+
+  [ Sandro Tosi ]
+  * New upstream release
+  * debian/copyright
+    - add upstream copyright notices
+  * debian/control
+    - bump Standards-Version to 4.3.0 (no changes needed)
+
+ -- Sandro Tosi <morph@debian.org>  Tue, 25 Dec 2018 18:34:21 -0500
+
+astroid (2.0.4-2) unstable; urgency=medium
+
+  * Team upload.
+  * Remove pytest cache after running the tests (Closes: #909529)
+
+ -- Nicolas Dandrimont <olasd@debian.org>  Tue, 25 Sep 2018 13:04:14 +0200
+
+astroid (2.0.4-1) unstable; urgency=medium
+
+  Team upload.
+
+  [ Ondřej Nový ]
+  * Convert git repository from git-dpm to gbp layout
+
+  [ Nicolas Dandrimont ]
+  * New upstream release
+  * Drop python2 package, built from the astroid2 source package
+  * Build-Depend on python3-pytest to run tests at buildtime
+
+ -- Nicolas Dandrimont <olasd@debian.org>  Sun, 23 Sep 2018 15:17:11 +0200
+
+astroid (1.6.5-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/watch
+    - also look up for version with numbers and dots
+
+ -- Sandro Tosi <morph@debian.org>  Sat, 09 Jun 2018 19:00:36 -0400
+
+astroid (1.6.3-1) unstable; urgency=medium
+
+  [ Ondřej Nový ]
+  * d/control: Set Vcs-* to salsa.debian.org
+  * d/copyright: Use https protocol in Format field
+
+  [ Sandro Tosi ]
+  * New upstream release; Closes: #896113
+  * debian/control
+    - bump Standards-Version to 4.1.4 (no changes needed)
+  * debian/copyright
+    - extend packaging copyright years
+
+ -- Sandro Tosi <morph@debian.org>  Sat, 21 Apr 2018 16:31:57 -0400
+
+astroid (1.6.0-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/copyright
+    - update copyright information
+  * debian/watch
+    - use HTTPS to talk to pypi.debian.net
+
+ -- Sandro Tosi <morph@debian.org>  Mon, 25 Dec 2017 00:27:46 -0500
+
+astroid (1.5.3-2) unstable; urgency=medium
+
+  * debian/control
+    - add setuptools and backports.functools-lru-cache (python2 only) to bin
+      pkgs depends; Closes: #883360
+
+ -- Sandro Tosi <morph@debian.org>  Sun, 03 Dec 2017 21:11:27 -0500
+
+astroid (1.5.3-1) unstable; urgency=medium
+
+  * New upstream release; Closes: #868819
+  * debian/control
+    - bump Standards-Version to 4.1.2 (no changes needed)
+    - add singledispatch, enum34 to b-d and depends, patch by Michael
+      Hudson-Doyle
+
+ -- Sandro Tosi <morph@debian.org>  Thu, 30 Nov 2017 19:31:35 -0500
+
+astroid (1.4.9-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/copyright
+    - extend packaging copyright years
+
+ -- Sandro Tosi <morph@debian.org>  Thu, 05 Jan 2017 13:48:17 -0500
+
+astroid (1.4.8-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Sandro Tosi <morph@debian.org>  Tue, 16 Aug 2016 19:29:27 +0100
+
+astroid (1.4.7-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/control
+    - drop logilab-common from deps; Closes: #831505
+
+ -- Sandro Tosi <morph@debian.org>  Mon, 18 Jul 2016 19:26:03 +0100
+
+astroid (1.4.6-1) unstable; urgency=medium
+
+  [ Sandro Tosi ]
+  * New upstream release
+
+  [ Ondřej Nový ]
+  * Cleanup of d/copyright
+
+ -- Sandro Tosi <morph@debian.org>  Sat, 11 Jun 2016 18:54:21 +0100
+
+astroid (1.4.5-1) unstable; urgency=medium
+
+  [ Sandro Tosi ]
+  * New upstream release
+  * debian/control
+    - bump Standards-Version to 3.9.8 (no changes needed)
+
+  [ Ondřej Nový ]
+  * Fixed VCS URL (https)
+
+ -- Sandro Tosi <morph@debian.org>  Sat, 23 Apr 2016 01:16:09 +0100
+
+astroid (1.4.4-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Sandro Tosi <morph@debian.org>  Thu, 28 Jan 2016 19:35:47 +0000
+
+astroid (1.4.3-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/rules
+    - install README.rst (README was renamed to it)
+
+ -- Sandro Tosi <morph@debian.org>  Sun, 03 Jan 2016 02:24:23 +0000
+
+astroid (1.4.1-1) unstable; urgency=medium
+
+  * New upstream release
+    - add support for Python 3.5; Closes: #800788
+    - correctly handle multiprocessing; Closes: #790884
+  * debian/copyright
+    - extend packaging copyright years
+  * debian/control
+    - add wrapt and lazy_object_proxy to b-d, needed to trigger the packages
+      dependencies detection
+
+ -- Sandro Tosi <morph@debian.org>  Sat, 02 Jan 2016 16:36:00 +0000
+
+astroid (1.3.8-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/control
+    - tighen logilab-common deps to >= 0.63.0
+
+ -- Sandro Tosi <morph@debian.org>  Tue, 04 Aug 2015 07:57:06 +0100
+
+astroid (1.3.6-2) unstable; urgency=medium
+
+  * upload to unstable
+
+ -- Sandro Tosi <morph@debian.org>  Sun, 02 Aug 2015 00:11:06 +0100
+
+astroid (1.3.6-1) experimental; urgency=medium
+
+  * New upstream release
+  * debian/watch
+    - uses PyPI redirector
+  * debian/control
+    - add python{,3}-nose to b-d, needed to run tests
+
+ -- Sandro Tosi <morph@debian.org>  Thu, 26 Mar 2015 00:28:54 +0000
+
+astroid (1.3.4-1) experimental; urgency=medium
+
+  * New upstream release
+  * debian/copyright
+    - extend upstream and packaging copyright years
+    - update upstream email contact
+    - update path location for new upstream code organization
+  * debian/control
+    - add six to dependencies
+    - add setuptoold to b-d
+  * debian/patches/*
+    - drop patched, they are now part of a release
+  * debian/watch
+    - update to the proper PyPI location
+  * debian/rules
+    - test dir has changed name, update rm command
+
+ -- Sandro Tosi <morph@debian.org>  Sun, 01 Feb 2015 21:31:37 +0000
+
+astroid (1.2.1-3) unstable; urgency=medium
+
+  * debian/patches/afea46c0380956213976db2ce0f1e8f3cf6a0abc.patch
+    - enable fine-grained control over extensions loading; this fix is needed
+      after #591676 fix; Addresses: #772018
+
+ -- Sandro Tosi <morph@debian.org>  Mon, 08 Dec 2014 21:43:04 +0000
+
+astroid (1.2.1-2) unstable; urgency=medium
+
+  * debian/patches/e24cacb15e2e152db155fdca9197a8d1bf9ce235.patch
+    - Never load C extensions that are not from the standard library and also
+      never load any compiled Python files; thanks to Jakub Wilk for the report;
+      Closes: #591676
+
+ -- Sandro Tosi <morph@debian.org>  Sun, 23 Nov 2014 13:36:44 +0000
+
+astroid (1.2.1-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/watch
+    - update to support multiple tarball formats
+  * debian/control
+    - bump Standards-Version to 3.9.6 (no changes needed)
+    - add dh-python to b-d, that package will contain dh_python* scripts
+
+ -- Sandro Tosi <morph@debian.org>  Sun, 02 Nov 2014 14:47:27 +0000
+
+astroid (1.2.0-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Sandro Tosi <morph@debian.org>  Sat, 09 Aug 2014 14:47:03 +0100
+
+astroid (1.1.1-1) unstable; urgency=medium
+
+  * New upstream release; Closes: #735327
+  * debian/control
+    - switch me to Maintainer (team to Uploaders)
+  * debian/copyright
+    - extend upstream copyright years
+  * debian/patches/*
+    - removed, merged upstream
+
+ -- Sandro Tosi <morph@debian.org>  Sun, 11 May 2014 17:43:01 +0200
+
+astroid (1.0.1-2) unstable; urgency=low
+
+  * debian/copyright
+    - document test/data/SSL1/Connection1.py copyright, as pointed out by
+      Thorsten Alteholz
+  * debian/patches/bts744225-fix-gi-introspection-issues.patch
+    - fix GI introspection issues; thanks to Leo Iannacone for the report;
+      Closes: #744225
+
+ -- Sandro Tosi <morph@debian.org>  Sat, 19 Apr 2014 19:57:08 +0200
+
+astroid (1.0.1-1) unstable; urgency=low
+
+  * Initial release (Closes: #734075)
+
+ -- Sandro Tosi <morph@debian.org>  Sat, 04 Jan 2014 12:14:12 +0100

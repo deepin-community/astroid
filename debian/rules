@@ -1,0 +1,20 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+export PYBUILD_NAME=astroid
+export PYBUILD_TEST_ARGS=-k test_oserror
+export PYBUILD_BEFORE_TEST=cp {dir}/pytest.ini {build_dir}; cp -r {dir}/tests {build_dir}/astroid/
+export PYBUILD_AFTER_TEST=rm {build_dir}/pytest.ini; rm -r {build_dir}/astroid/tests
+
+%:
+	dh $@ --buildsystem pybuild --with python3
+
+override_dh_installdocs:
+	dh_installdocs -i README.rst
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -rf $(CURDIR)/.eggs
