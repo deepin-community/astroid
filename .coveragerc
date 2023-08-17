@@ -1,12 +1,10 @@
-[paths]
-source =
-   astroid
+[run]
+relative_files = true
 
 [report]
-include =
-    astroid/*
 omit =
     */tests/*
+    */tmp*/*
 exclude_lines =
     # Re-enable default pragma
     pragma: no cover
@@ -17,3 +15,6 @@ exclude_lines =
     # Type checking code not executed during pytest runs
     if TYPE_CHECKING:
     @overload
+
+    # Abstract methods
+    raise NotImplementedError

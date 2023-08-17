@@ -5,34 +5,31 @@ These are abstract node classes that :ref:`other nodes <nodes>` inherit from.
 
 .. autosummary::
 
-   astroid.mixins.AssignTypeMixin
+   astroid.nodes._base_nodes.AssignTypeNode
    astroid.nodes.BaseContainer
-   astroid.mixins.BlockRangeMixIn
+   astroid.nodes._base_nodes.MultiLineWithElseBlockNode
    astroid.nodes.ComprehensionScope
-   astroid.mixins.FilterStmtsMixin
-   astroid.mixins.ImportFromMixin
-   astroid.nodes.ListComp
-   astroid.nodes.LocalsDictNodeNG
+   astroid.nodes._base_nodes.FilterStmtsBaseNode
+   astroid.nodes._base_nodes.ImportNode
+     astroid.nodes.LocalsDictNodeNG
    astroid.nodes.node_classes.LookupMixIn
    astroid.nodes.NodeNG
-   astroid.mixins.ParentAssignTypeMixin
+   astroid.nodes._base_nodes.ParentAssignNode
    astroid.nodes.Statement
    astroid.nodes.Pattern
 
 
-.. autoclass:: astroid.mixins.AssignTypeMixin
+.. autoclass:: astroid.nodes._base_nodes.AssignTypeNode
 
 .. autoclass:: astroid.nodes.BaseContainer
 
-.. autoclass:: astroid.mixins.BlockRangeMixIn
+.. autoclass:: astroid.nodes._base_nodes.MultiLineWithElseBlockNode
 
 .. autoclass:: astroid.nodes.ComprehensionScope
 
-.. autoclass:: astroid.mixins.FilterStmtsMixin
+.. autoclass:: astroid.nodes._base_nodes.FilterStmtsBaseNode
 
-.. autoclass:: astroid.mixins.ImportFromMixin
-
-.. autoclass:: astroid.nodes.ListComp
+.. autoclass:: astroid.nodes._base_nodes.ImportNode
 
 .. autoclass:: astroid.nodes.LocalsDictNodeNG
 
@@ -40,7 +37,7 @@ These are abstract node classes that :ref:`other nodes <nodes>` inherit from.
 
 .. autoclass:: astroid.nodes.NodeNG
 
-.. autoclass:: astroid.mixins.ParentAssignTypeMixin
+.. autoclass:: astroid.nodes._base_nodes.ParentAssignNode
 
 .. autoclass:: astroid.nodes.Statement
 

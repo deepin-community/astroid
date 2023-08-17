@@ -1,25 +1,14 @@
-# Copyright (c) 2015-2020 Claudiu Popa <pcmanticore@gmail.com>
-# Copyright (c) 2015-2016 Ceridwen <ceridwenv@gmail.com>
-# Copyright (c) 2018 Bryce Guinta <bryce.paul.guinta@gmail.com>
-# Copyright (c) 2020-2021 hippo91 <guillaume.peillex@gmail.com>
-# Copyright (c) 2020 Simon Hewitt <si@sjhewitt.co.uk>
-# Copyright (c) 2020 Bryce Guinta <bryce.guinta@protonmail.com>
-# Copyright (c) 2020 Ram Rachum <ram@rachum.com>
-# Copyright (c) 2021 Pierre Sassoulas <pierre.sassoulas@gmail.com>
-# Copyright (c) 2021 David Liu <david@cs.toronto.edu>
-# Copyright (c) 2021 Marc Mueller <30130371+cdce8p@users.noreply.github.com>
-# Copyright (c) 2021 Andrew Haigh <hello@nelf.in>
-
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
 # For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
 
+"""Various helper utilities."""
 
-"""
-Various helper utilities.
-"""
+from __future__ import annotations
 
+from collections.abc import Generator
 
-from astroid import bases, manager, nodes, raw_building, util
+from astroid import bases, manager, nodes, objects, raw_building, util
 from astroid.context import CallContext, InferenceContext
 from astroid.exceptions import (
     AstroidTypeError,
@@ -29,15 +18,18 @@ from astroid.exceptions import (
     _NonDeducibleTypeHierarchy,
 )
 from astroid.nodes import scoped_nodes
+from astroid.typing import InferenceResult, SuccessfulInferenceResult
 
 
-def _build_proxy_class(cls_name, builtins):
+def _build_proxy_class(cls_name: str, builtins: nodes.Module) -> nodes.ClassDef:
     proxy = raw_building.build_class(cls_name)
     proxy.parent = builtins
     return proxy
 
 
-def _function_type(function, builtins):
+def _function_type(
+    function: nodes.Lambda | bases.UnboundMethod, builtins: nodes.Module
+) -> nodes.ClassDef:
     if isinstance(function, scoped_nodes.Lambda):
         if function.root().name == "builtins":
             cls_name = "builtin_function_or_method"
@@ -45,12 +37,14 @@ def _function_type(function, builtins):
             cls_name = "function"
     elif isinstance(function, bases.BoundMethod):
         cls_name = "method"
-    elif isinstance(function, bases.UnboundMethod):
+    else:
         cls_name = "function"
     return _build_proxy_class(cls_name, builtins)
 
 
-def _object_type(node, context=None):
+def _object_type(
+    node: SuccessfulInferenceResult, context: InferenceContext | None = None
+) -> Generator[InferenceResult | None, None, None]:
     astroid_manager = manager.AstroidManager()
     builtins = astroid_manager.builtins_module
     context = context or InferenceContext()
@@ -67,12 +61,20 @@ def _object_type(node, context=None):
             yield _function_type(inferred, builtins)
         elif isinstance(inferred, scoped_nodes.Module):
             yield _build_proxy_class("module", builtins)
-        else:
+        elif isinstance(inferred, nodes.Unknown):
+            raise InferenceError
+        elif isinstance(inferred, util.UninferableBase):
+            yield inferred
+        elif isinstance(inferred, (bases.Proxy, nodes.Slice, objects.Super)):
             yield inferred._proxied
+        else:  # pragma: no cover
+            raise AssertionError(f"We don't handle {type(inferred)} currently")
 
 
-def object_type(node, context=None):
-    """Obtain the type of the given node
+def object_type(
+    node: SuccessfulInferenceResult, context: InferenceContext | None = None
+) -> InferenceResult | None:
+    """Obtain the type of the given node.
 
     This is used to implement the ``type`` builtin, which means that it's
     used for inferring type calls, as well as used in a couple of other places
@@ -90,13 +92,15 @@ def object_type(node, context=None):
     return list(types)[0]
 
 
-def _object_type_is_subclass(obj_type, class_or_seq, context=None):
+def _object_type_is_subclass(
+    obj_type, class_or_seq, context: InferenceContext | None = None
+):
     if not isinstance(class_or_seq, (tuple, list)):
         class_seq = (class_or_seq,)
     else:
         class_seq = class_or_seq
 
-    if obj_type is util.Uninferable:
+    if isinstance(obj_type, util.UninferableBase):
         return util.Uninferable
 
     # Instances are not types
@@ -108,7 +112,7 @@ def _object_type_is_subclass(obj_type, class_or_seq, context=None):
     # issubclass(type, (object, 1)) evaluates to true
     # issubclass(object, (1, type)) raises TypeError
     for klass in class_seq:
-        if klass is util.Uninferable:
+        if isinstance(klass, util.UninferableBase):
             raise AstroidTypeError("arg 2 must be a type or tuple of types")
 
         for obj_subclass in obj_type.mro():
@@ -117,8 +121,8 @@ def _object_type_is_subclass(obj_type, class_or_seq, context=None):
     return False
 
 
-def object_isinstance(node, class_or_seq, context=None):
-    """Check if a node 'isinstance' any node in class_or_seq
+def object_isinstance(node, class_or_seq, context: InferenceContext | None = None):
+    """Check if a node 'isinstance' any node in class_or_seq.
 
     :param node: A given node
     :param class_or_seq: Union[nodes.NodeNG, Sequence[nodes.NodeNG]]
@@ -127,13 +131,13 @@ def object_isinstance(node, class_or_seq, context=None):
     :raises AstroidTypeError: if the given ``classes_or_seq`` are not types
     """
     obj_type = object_type(node, context)
-    if obj_type is util.Uninferable:
+    if isinstance(obj_type, util.UninferableBase):
         return util.Uninferable
     return _object_type_is_subclass(obj_type, class_or_seq, context=context)
 
 
-def object_issubclass(node, class_or_seq, context=None):
-    """Check if a type is a subclass of any node in class_or_seq
+def object_issubclass(node, class_or_seq, context: InferenceContext | None = None):
+    """Check if a type is a subclass of any node in class_or_seq.
 
     :param node: A given node
     :param class_or_seq: Union[Nodes.NodeNG, Sequence[nodes.NodeNG]]
@@ -148,7 +152,9 @@ def object_issubclass(node, class_or_seq, context=None):
     return _object_type_is_subclass(node, class_or_seq, context=context)
 
 
-def safe_infer(node, context=None):
+def safe_infer(
+    node: nodes.NodeNG | bases.Proxy, context: InferenceContext | None = None
+) -> InferenceResult | None:
     """Return the inferred value for the given node.
 
     Return None if inference failed or if there is some ambiguity (more than
@@ -168,8 +174,8 @@ def safe_infer(node, context=None):
         return value
 
 
-def has_known_bases(klass, context=None):
-    """Return true if all base classes of a class could be inferred."""
+def has_known_bases(klass, context: InferenceContext | None = None) -> bool:
+    """Return whether all base classes of a class could be inferred."""
     try:
         return klass._all_bases_known
     except AttributeError:
@@ -188,7 +194,7 @@ def has_known_bases(klass, context=None):
     return True
 
 
-def _type_check(type1, type2):
+def _type_check(type1, type2) -> bool:
     if not all(map(has_known_bases, (type1, type2))):
         raise _NonDeducibleTypeHierarchy
 
@@ -201,17 +207,17 @@ def _type_check(type1, type2):
         raise _NonDeducibleTypeHierarchy from e
 
 
-def is_subtype(type1, type2):
+def is_subtype(type1, type2) -> bool:
     """Check if *type1* is a subtype of *type2*."""
     return _type_check(type1=type2, type2=type1)
 
 
-def is_supertype(type1, type2):
+def is_supertype(type1, type2) -> bool:
     """Check if *type2* is a supertype of *type1*."""
     return _type_check(type1, type2)
 
 
-def class_instance_as_index(node):
+def class_instance_as_index(node: SuccessfulInferenceResult) -> nodes.Const | None:
     """Get the value as an index for the given instance.
 
     If an instance provides an __index__ method, then it can
@@ -234,8 +240,8 @@ def class_instance_as_index(node):
     return None
 
 
-def object_len(node, context=None):
-    """Infer length of given node object
+def object_len(node, context: InferenceContext | None = None):
+    """Infer length of given node object.
 
     :param Union[nodes.ClassDef, nodes.Instance] node:
     :param node: Node to infer length of
@@ -254,11 +260,11 @@ def object_len(node, context=None):
 
     # prevent self referential length calls from causing a recursion error
     # see https://github.com/PyCQA/astroid/issues/777
-    node_frame = node.frame()
+    node_frame = node.frame(future=True)
     if (
         isinstance(node_frame, scoped_nodes.FunctionDef)
         and node_frame.name == "__len__"
-        and inferred_node is not None
+        and hasattr(inferred_node, "_proxied")
         and inferred_node._proxied == node_frame.parent
     ):
         message = (
@@ -269,7 +275,7 @@ def object_len(node, context=None):
         )
         raise InferenceError(message)
 
-    if inferred_node is None or inferred_node is util.Uninferable:
+    if inferred_node is None or isinstance(inferred_node, util.UninferableBase):
         raise InferenceError(node=node)
     if isinstance(inferred_node, nodes.Const) and isinstance(
         inferred_node.value, (bytes, str)
@@ -294,7 +300,7 @@ def object_len(node, context=None):
         ) from e
 
     inferred = len_call.infer_call_result(node, context)
-    if inferred is util.Uninferable:
+    if isinstance(inferred, util.UninferableBase):
         raise InferenceError(node=node, context=context)
     result_of_len = next(inferred, None)
     if (

@@ -1,36 +1,19 @@
-# Copyright (c) 2009-2011, 2013-2014 LOGILAB S.A. (Paris, FRANCE) <contact@logilab.fr>
-# Copyright (c) 2012 FELD Boris <lothiraldan@gmail.com>
-# Copyright (c) 2014-2020 Claudiu Popa <pcmanticore@gmail.com>
-# Copyright (c) 2014 Google, Inc.
-# Copyright (c) 2014 Eevee (Alex Munroe) <amunroe@yelp.com>
-# Copyright (c) 2015-2016 Ceridwen <ceridwenv@gmail.com>
-# Copyright (c) 2015 Florian Bruhin <me@the-compiler.org>
-# Copyright (c) 2016-2017 Derek Gustafson <degustaf@gmail.com>
-# Copyright (c) 2017 Calen Pennington <calen.pennington@gmail.com>
-# Copyright (c) 2018-2019 Nick Drozd <nicholasdrozd@gmail.com>
-# Copyright (c) 2018-2019 hippo91 <guillaume.peillex@gmail.com>
-# Copyright (c) 2018 Ville Skyttä <ville.skytta@iki.fi>
-# Copyright (c) 2018 Bryce Guinta <bryce.paul.guinta@gmail.com>
-# Copyright (c) 2018 Daniel Colascione <dancol@dancol.org>
-# Copyright (c) 2019 Hugo van Kemenade <hugovk@users.noreply.github.com>
-# Copyright (c) 2021 Pierre Sassoulas <pierre.sassoulas@gmail.com>
-# Copyright (c) 2021 pre-commit-ci[bot] <bot@noreply.github.com>
-# Copyright (c) 2021 Daniël van Noord <13665637+DanielNoord@users.noreply.github.com>
-# Copyright (c) 2021 David Liu <david@cs.toronto.edu>
-# Copyright (c) 2021 doranid <ddandd@gmail.com>
-# Copyright (c) 2021 Marc Mueller <30130371+cdce8p@users.noreply.github.com>
-# Copyright (c) 2021 Andrew Haigh <hello@nelf.in>
-
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
 # For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
 
 """This module contains base classes and functions for the nodes and some
 inference utils.
 """
+from __future__ import annotations
 
 import collections
+import collections.abc
+import sys
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from astroid import decorators
+from astroid import decorators, nodes
 from astroid.const import PY310_PLUS
 from astroid.context import (
     CallContext,
@@ -44,7 +27,16 @@ from astroid.exceptions import (
     InferenceError,
     NameInferenceError,
 )
-from astroid.util import Uninferable, lazy_descriptor, lazy_import
+from astroid.typing import InferBinaryOp, InferenceErrorInfo, InferenceResult
+from astroid.util import Uninferable, UninferableBase, lazy_descriptor, lazy_import
+
+if sys.version_info >= (3, 8):
+    from typing import Literal
+else:
+    from typing_extensions import Literal
+
+if TYPE_CHECKING:
+    from astroid.constraint import Constraint
 
 objectmodel = lazy_import("interpreter.objectmodel")
 helpers = lazy_import("helpers")
@@ -82,12 +74,14 @@ POSSIBLE_PROPERTIES = {
 }
 
 
-def _is_property(meth, context=None):
+def _is_property(meth, context: InferenceContext | None = None) -> bool:
     decoratornames = meth.decoratornames(context=context)
     if PROPERTIES.intersection(decoratornames):
         return True
     stripped = {
-        name.split(".")[-1] for name in decoratornames if name is not Uninferable
+        name.split(".")[-1]
+        for name in decoratornames
+        if not isinstance(name, UninferableBase)
     }
     if any(name in stripped for name in POSSIBLE_PROPERTIES):
         return True
@@ -97,7 +91,7 @@ def _is_property(meth, context=None):
         return False
     for decorator in meth.decorators.nodes or ():
         inferred = helpers.safe_infer(decorator, context=context)
-        if inferred is None or inferred is Uninferable:
+        if inferred is None or isinstance(inferred, UninferableBase):
             continue
         if inferred.__class__.__name__ == "ClassDef":
             for base_class in inferred.bases:
@@ -111,7 +105,7 @@ def _is_property(meth, context=None):
 
 
 class Proxy:
-    """a simple proxy object
+    """A simple proxy object.
 
     Note:
 
@@ -119,10 +113,23 @@ class Proxy:
     if new instance attributes are created. See the Const class
     """
 
-    _proxied = None  # proxied object may be set by class or by instance
+    _proxied: nodes.ClassDef | nodes.Lambda | Proxy | None = (
+        None  # proxied object may be set by class or by instance
+    )
 
-    def __init__(self, proxied=None):
-        if proxied is not None:
+    def __init__(
+        self, proxied: nodes.ClassDef | nodes.Lambda | Proxy | None = None
+    ) -> None:
+        if proxied is None:
+            # This is a hack to allow calling this __init__ during bootstrapping of
+            # builtin classes and their docstrings.
+            # For Const, Generator, and UnionType nodes the _proxied attribute
+            # is set during bootstrapping
+            # as we first need to build the ClassDef that they can proxy.
+            # Thus, if proxied is None self should be a Const or Generator
+            # as that is the only way _proxied will be correctly set as a ClassDef.
+            assert isinstance(self, (nodes.Const, Generator, UnionType))
+        else:
             self._proxied = proxied
 
     def __getattr__(self, name):
@@ -132,36 +139,56 @@ class Proxy:
             return self.__dict__[name]
         return getattr(self._proxied, name)
 
-    def infer(self, context=None):
+    def infer(  # type: ignore[return]
+        self, context: InferenceContext | None = None, **kwargs: Any
+    ) -> collections.abc.Generator[InferenceResult, None, InferenceErrorInfo | None]:
         yield self
 
 
-def _infer_stmts(stmts, context, frame=None):
+def _infer_stmts(
+    stmts: Sequence[nodes.NodeNG | UninferableBase | Instance],
+    context: InferenceContext | None,
+    frame: nodes.NodeNG | Instance | None = None,
+) -> collections.abc.Generator[InferenceResult, None, None]:
     """Return an iterator on statements inferred by each statement in *stmts*."""
     inferred = False
+    constraint_failed = False
     if context is not None:
         name = context.lookupname
         context = context.clone()
+        constraints = context.constraints.get(name, {})
     else:
         name = None
+        constraints = {}
         context = InferenceContext()
 
     for stmt in stmts:
-        if stmt is Uninferable:
+        if isinstance(stmt, UninferableBase):
             yield stmt
             inferred = True
             continue
-        context.lookupname = stmt._infer_name(frame, name)
+        # 'context' is always InferenceContext and Instances get '_infer_name' from ClassDef
+        context.lookupname = stmt._infer_name(frame, name)  # type: ignore[union-attr]
         try:
+            stmt_constraints: set[Constraint] = set()
+            for constraint_stmt, potential_constraints in constraints.items():
+                if not constraint_stmt.parent_of(stmt):
+                    stmt_constraints.update(potential_constraints)
             for inf in stmt.infer(context=context):
-                yield inf
-                inferred = True
+                if all(constraint.satisfied_by(inf) for constraint in stmt_constraints):
+                    yield inf
+                    inferred = True
+                else:
+                    constraint_failed = True
         except NameInferenceError:
             continue
         except InferenceError:
             yield Uninferable
             inferred = True
-    if not inferred:
+
+    if not inferred and constraint_failed:
+        yield Uninferable
+    elif not inferred:
         raise InferenceError(
             "Inference failed for all members of {stmts!r}.",
             stmts=stmts,
@@ -180,7 +207,7 @@ def _infer_method_result_truth(instance, method_name, context):
         try:
             context.callcontext = CallContext(args=[], callee=meth)
             for value in meth.infer_call_result(instance, context=context):
-                if value is Uninferable:
+                if isinstance(value, UninferableBase):
                     return value
                 try:
                     inferred = next(value.infer(context=context))
@@ -193,14 +220,16 @@ def _infer_method_result_truth(instance, method_name, context):
 
 
 class BaseInstance(Proxy):
-    """An instance base class, which provides lookup methods for potential instances."""
+    """An instance base class, which provides lookup methods for potential
+    instances.
+    """
 
     special_attributes = None
 
-    def display_type(self):
+    def display_type(self) -> str:
         return "Instance of"
 
-    def getattr(self, name, context=None, lookupclass=True):
+    def getattr(self, name, context: InferenceContext | None = None, lookupclass=True):
         try:
             values = self._proxied.instance_attr(name, context)
         except AttributeInferenceError as exc:
@@ -226,8 +255,8 @@ class BaseInstance(Proxy):
                 pass
         return values
 
-    def igetattr(self, name, context=None):
-        """inferred getattr"""
+    def igetattr(self, name, context: InferenceContext | None = None):
+        """Inferred getattr."""
         if not context:
             context = InferenceContext()
         try:
@@ -257,8 +286,8 @@ class BaseInstance(Proxy):
             except AttributeInferenceError as error:
                 raise InferenceError(**vars(error)) from error
 
-    def _wrap_attr(self, attrs, context=None):
-        """wrap bound methods of attrs in a InstanceMethod proxies"""
+    def _wrap_attr(self, attrs, context: InferenceContext | None = None):
+        """Wrap bound methods of attrs in a InstanceMethod proxies."""
         for attr in attrs:
             if isinstance(attr, UnboundMethod):
                 if _is_property(attr):
@@ -273,12 +302,22 @@ class BaseInstance(Proxy):
             else:
                 yield attr
 
-    def infer_call_result(self, caller, context=None):
-        """infer what a class instance is returning when called"""
+    def infer_call_result(
+        self, caller: nodes.Call | Proxy, context: InferenceContext | None = None
+    ):
+        """Infer what a class instance is returning when called."""
         context = bind_context_to_node(context, self)
         inferred = False
+
+        # If the call is an attribute on the instance, we infer the attribute itself
+        if isinstance(caller, nodes.Call) and isinstance(caller.func, nodes.Attribute):
+            for res in self.igetattr(caller.func.attrname, context):
+                inferred = True
+                yield res
+
+        # Otherwise we infer the call to the __call__ dunder normally
         for node in self._proxied.igetattr("__call__", context):
-            if node is Uninferable or not node.callable():
+            if isinstance(node, UninferableBase) or not node.callable():
                 continue
             for res in node.infer_call_result(caller, context):
                 inferred = True
@@ -290,32 +329,39 @@ class BaseInstance(Proxy):
 class Instance(BaseInstance):
     """A special node representing a class instance."""
 
+    _proxied: nodes.ClassDef
+
     # pylint: disable=unnecessary-lambda
     special_attributes = lazy_descriptor(lambda: objectmodel.InstanceModel())
 
-    def __repr__(self):
+    def __init__(self, proxied: nodes.ClassDef | None) -> None:
+        super().__init__(proxied)
+
+    infer_binary_op: ClassVar[InferBinaryOp[Instance]]
+
+    def __repr__(self) -> str:
         return "<Instance of {}.{} at 0x{}>".format(
             self._proxied.root().name, self._proxied.name, id(self)
         )
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Instance of {self._proxied.root().name}.{self._proxied.name}"
 
-    def callable(self):
+    def callable(self) -> bool:
         try:
             self._proxied.getattr("__call__", class_context=False)
             return True
         except AttributeInferenceError:
             return False
 
-    def pytype(self):
+    def pytype(self) -> str:
         return self._proxied.qname()
 
-    def display_type(self):
+    def display_type(self) -> str:
         return "Instance of"
 
-    def bool_value(self, context=None):
-        """Infer the truth value for an Instance
+    def bool_value(self, context: InferenceContext | None = None):
+        """Infer the truth value for an Instance.
 
         The truth value of an instance is determined by these conditions:
 
@@ -340,8 +386,7 @@ class Instance(BaseInstance):
                 return True
         return result
 
-    def getitem(self, index, context=None):
-        # TODO: Rewrap index to Const for this case
+    def getitem(self, index, context: InferenceContext | None = None):
         new_context = bind_context_to_node(context, self)
         if not context:
             context = new_context
@@ -362,29 +407,29 @@ class Instance(BaseInstance):
 
 
 class UnboundMethod(Proxy):
-    """a special node representing a method not bound to an instance"""
+    """A special node representing a method not bound to an instance."""
 
     # pylint: disable=unnecessary-lambda
     special_attributes = lazy_descriptor(lambda: objectmodel.UnboundMethodModel())
 
-    def __repr__(self):
-        frame = self._proxied.parent.frame()
+    def __repr__(self) -> str:
+        frame = self._proxied.parent.frame(future=True)
         return "<{} {} of {} at 0x{}".format(
             self.__class__.__name__, self._proxied.name, frame.qname(), id(self)
         )
 
-    def implicit_parameters(self):
+    def implicit_parameters(self) -> Literal[0]:
         return 0
 
-    def is_bound(self):
+    def is_bound(self) -> Literal[False]:
         return False
 
-    def getattr(self, name, context=None):
+    def getattr(self, name, context: InferenceContext | None = None):
         if name in self.special_attributes:
             return [self.special_attributes.lookup(name)]
         return self._proxied.getattr(name, context)
 
-    def igetattr(self, name, context=None):
+    def igetattr(self, name, context: InferenceContext | None = None):
         if name in self.special_attributes:
             return iter((self.special_attributes.lookup(name),))
         return self._proxied.igetattr(name, context)
@@ -395,31 +440,56 @@ class UnboundMethod(Proxy):
         on ``object.__new__`` will be of type ``object``,
         which is incorrect for the argument in general.
         If no context is given the ``object.__new__`` call argument will
-        correctly inferred except when inside a call that requires
+        be correctly inferred except when inside a call that requires
         the additional context (such as a classmethod) of the boundnode
         to determine which class the method was called from
         """
 
-        # If we're unbound method __new__ of builtin object, the result is an
+        # If we're unbound method __new__ of a builtin, the result is an
         # instance of the class given as first argument.
-        if (
-            self._proxied.name == "__new__"
-            and self._proxied.parent.frame().qname() == "builtins.object"
-        ):
-            if caller.args:
-                node_context = context.extra_context.get(caller.args[0])
-                infer = caller.args[0].infer(context=node_context)
-            else:
-                infer = []
-            return (Instance(x) if x is not Uninferable else x for x in infer)
+        if self._proxied.name == "__new__":
+            qname = self._proxied.parent.frame(future=True).qname()
+            # Avoid checking builtins.type: _infer_type_new_call() does more validation
+            if qname.startswith("builtins.") and qname != "builtins.type":
+                return self._infer_builtin_new(caller, context)
         return self._proxied.infer_call_result(caller, context)
 
-    def bool_value(self, context=None):
+    def _infer_builtin_new(
+        self,
+        caller: nodes.Call,
+        context: InferenceContext,
+    ) -> collections.abc.Generator[
+        nodes.Const | Instance | UninferableBase, None, None
+    ]:
+        if not caller.args:
+            return
+        # Attempt to create a constant
+        if len(caller.args) > 1:
+            value = None
+            if isinstance(caller.args[1], nodes.Const):
+                value = caller.args[1].value
+            else:
+                inferred_arg = next(caller.args[1].infer(), None)
+                if isinstance(inferred_arg, nodes.Const):
+                    value = inferred_arg.value
+            if value is not None:
+                yield nodes.const_factory(value)
+                return
+
+        node_context = context.extra_context.get(caller.args[0])
+        for inferred in caller.args[0].infer(context=node_context):
+            if isinstance(inferred, UninferableBase):
+                yield inferred
+            if isinstance(inferred, nodes.ClassDef):
+                yield Instance(inferred)
+            raise InferenceError
+
+    def bool_value(self, context: InferenceContext | None = None) -> Literal[True]:
         return True
 
 
 class BoundMethod(UnboundMethod):
-    """a special node representing a method bound to an instance"""
+    """A special node representing a method bound to an instance."""
 
     # pylint: disable=unnecessary-lambda
     special_attributes = lazy_descriptor(lambda: objectmodel.BoundMethodModel())
@@ -428,16 +498,16 @@ class BoundMethod(UnboundMethod):
         super().__init__(proxy)
         self.bound = bound
 
-    def implicit_parameters(self):
+    def implicit_parameters(self) -> Literal[0, 1]:
         if self.name == "__new__":
             # __new__ acts as a classmethod but the class argument is not implicit.
             return 0
         return 1
 
-    def is_bound(self):
+    def is_bound(self) -> Literal[True]:
         return True
 
-    def _infer_type_new_call(self, caller, context):
+    def _infer_type_new_call(self, caller, context):  # noqa: C901
         """Try to infer what type.__new__(mcs, name, bases, attrs) returns.
 
         In order for such call to be valid, the metaclass needs to be
@@ -528,7 +598,7 @@ class BoundMethod(UnboundMethod):
         cls.locals = cls_locals
         return cls
 
-    def infer_call_result(self, caller, context=None):
+    def infer_call_result(self, caller, context: InferenceContext | None = None):
         context = bind_context_to_node(context, self.bound)
         if (
             self.bound.__class__.__name__ == "ClassDef"
@@ -543,19 +613,23 @@ class BoundMethod(UnboundMethod):
 
         return super().infer_call_result(caller, context)
 
-    def bool_value(self, context=None):
+    def bool_value(self, context: InferenceContext | None = None) -> Literal[True]:
         return True
 
 
 class Generator(BaseInstance):
-    """a special node representing a generator.
+    """A special node representing a generator.
 
     Proxied class is set once for all in raw_building.
     """
 
+    _proxied: nodes.ClassDef
+
     special_attributes = lazy_descriptor(objectmodel.GeneratorModel)
 
-    def __init__(self, parent=None, generator_initial_context=None):
+    def __init__(
+        self, parent=None, generator_initial_context: InferenceContext | None = None
+    ):
         super().__init__()
         self.parent = parent
         self._call_context = copy_context(generator_initial_context)
@@ -564,36 +638,74 @@ class Generator(BaseInstance):
     def infer_yield_types(self):
         yield from self.parent.infer_yield_result(self._call_context)
 
-    def callable(self):
+    def callable(self) -> Literal[False]:
         return False
 
-    def pytype(self):
+    def pytype(self) -> Literal["builtins.generator"]:
         return "builtins.generator"
 
-    def display_type(self):
+    def display_type(self) -> str:
         return "Generator"
 
-    def bool_value(self, context=None):
+    def bool_value(self, context: InferenceContext | None = None) -> Literal[True]:
         return True
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Generator({self._proxied.name}) l.{self.lineno} at 0x{id(self)}>"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Generator({self._proxied.name})"
 
 
 class AsyncGenerator(Generator):
-    """Special node representing an async generator"""
+    """Special node representing an async generator."""
 
-    def pytype(self):
+    def pytype(self) -> Literal["builtins.async_generator"]:
         return "builtins.async_generator"
 
-    def display_type(self):
+    def display_type(self) -> str:
         return "AsyncGenerator"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<AsyncGenerator({self._proxied.name}) l.{self.lineno} at 0x{id(self)}>"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"AsyncGenerator({self._proxied.name})"
+
+
+class UnionType(BaseInstance):
+    """Special node representing new style typing unions.
+
+    Proxied class is set once for all in raw_building.
+    """
+
+    _proxied: nodes.ClassDef
+
+    def __init__(
+        self,
+        left: UnionType | nodes.ClassDef | nodes.Const,
+        right: UnionType | nodes.ClassDef | nodes.Const,
+        parent: nodes.NodeNG | None = None,
+    ) -> None:
+        super().__init__()
+        self.parent = parent
+        self.left = left
+        self.right = right
+
+    def callable(self) -> Literal[False]:
+        return False
+
+    def bool_value(self, context: InferenceContext | None = None) -> Literal[True]:
+        return True
+
+    def pytype(self) -> Literal["types.UnionType"]:
+        return "types.UnionType"
+
+    def display_type(self) -> str:
+        return "UnionType"
+
+    def __repr__(self) -> str:
+        return f"<UnionType({self._proxied.name}) l.{self.lineno} at 0x{id(self)}>"
+
+    def __str__(self) -> str:
+        return f"UnionType({self._proxied.name})"

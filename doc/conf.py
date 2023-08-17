@@ -1,3 +1,7 @@
+# Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
+# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+
 #
 # Astroid documentation build configuration file, created by
 # sphinx-quickstart on Wed Jun 26 15:00:40 2013.
@@ -51,7 +55,8 @@ master_doc = "index"
 # General information about the project.
 project = "Astroid"
 current_year = datetime.utcnow().year
-copyright = f"2003-{current_year}, Logilab, PyCQA and contributors"
+contributors = "Logilab, and astroid contributors"
+copyright = f"2003-{current_year}, {contributors}"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -198,7 +203,7 @@ latex_documents = [
         "index",
         "Astroid.tex",
         "Astroid Documentation",
-        "Logilab, PyCQA and contributors",
+        contributors,
         "manual",
     ),
 ]
@@ -236,7 +241,7 @@ man_pages = [
         "index",
         "astroid",
         "Astroid Documentation",
-        ["Logilab, PyCQA and contributors"],
+        [contributors],
         1,
     )
 ]

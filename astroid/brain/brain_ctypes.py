@@ -1,9 +1,13 @@
+# Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
+# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+
 """
 Astroid hooks for ctypes module.
 
 Inside the ctypes module, the value class is defined inside
 the C coded module _ctypes.
-Thus astroid doesn't know that the value member is a bultin type
+Thus astroid doesn't know that the value member is a builtin type
 among float, int, bytes or str.
 """
 import sys
@@ -15,7 +19,9 @@ from astroid.manager import AstroidManager
 
 def enrich_ctypes_redefined_types():
     """
-    For each ctypes redefined types, overload 'value' and '_type_' members definition.
+    For each ctypes redefined types, overload 'value' and '_type_' members
+    definition.
+
     Overloading 'value' is mandatory otherwise astroid cannot infer the correct type for it.
     Overloading '_type_' is necessary because the class definition made here replaces the original
     one, in which '_type_' member is defined. Luckily those original class definitions are very short

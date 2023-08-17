@@ -1,22 +1,19 @@
-# Copyright (c) 2015-2016, 2018-2020 Claudiu Popa <pcmanticore@gmail.com>
-# Copyright (c) 2016 Ceridwen <ceridwenv@gmail.com>
-# Copyright (c) 2017-2021 hippo91 <guillaume.peillex@gmail.com>
-# Copyright (c) 2021 Pierre Sassoulas <pierre.sassoulas@gmail.com>
-# Copyright (c) 2021 Marc Mueller <30130371+cdce8p@users.noreply.github.com>
-
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
 # For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-
+# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
 
 """Astroid hooks for numpy ndarray class."""
+from __future__ import annotations
+
 from astroid.brain.brain_numpy_utils import numpy_supports_type_hints
 from astroid.builder import extract_node
+from astroid.context import InferenceContext
 from astroid.inference_tip import inference_tip
 from astroid.manager import AstroidManager
 from astroid.nodes.node_classes import Attribute
 
 
-def infer_numpy_ndarray(node, context=None):
+def infer_numpy_ndarray(node, context: InferenceContext | None = None):
     ndarray = """
     class ndarray(object):
         def __init__(self, shape, dtype=float, buffer=None, offset=0,
@@ -154,7 +151,7 @@ def infer_numpy_ndarray(node, context=None):
     return node.infer(context=context)
 
 
-def _looks_like_numpy_ndarray(node):
+def _looks_like_numpy_ndarray(node) -> bool:
     return isinstance(node, Attribute) and node.attrname == "ndarray"
 
 

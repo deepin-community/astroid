@@ -5,9 +5,8 @@
 #export DH_VERBOSE=1
 
 export PYBUILD_NAME=astroid
-export PYBUILD_TEST_ARGS=-k test_oserror
-export PYBUILD_BEFORE_TEST=cp {dir}/pytest.ini {build_dir}; cp -r {dir}/tests {build_dir}/astroid/
-export PYBUILD_AFTER_TEST=rm {build_dir}/pytest.ini; rm -r {build_dir}/astroid/tests
+export PYBUILD_BEFORE_TEST=cp -r {dir}/tests {build_dir}/astroid/
+export PYBUILD_AFTER_TEST=rm -r {build_dir}/astroid/tests
 
 %:
 	dh $@ --buildsystem pybuild --with python3

@@ -1,8 +1,13 @@
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
 # For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+
+from __future__ import annotations
+
 import random
 
 from astroid import helpers
+from astroid.context import InferenceContext
 from astroid.exceptions import UseInferenceDefault
 from astroid.inference_tip import inference_tip
 from astroid.manager import AstroidManager
@@ -36,14 +41,14 @@ def _clone_node_with_lineno(node, parent, lineno):
     return new_node
 
 
-def infer_random_sample(node, context=None):
+def infer_random_sample(node, context: InferenceContext | None = None):
     if len(node.args) != 2:
         raise UseInferenceDefault
 
-    length = node.args[1]
-    if not isinstance(length, Const):
+    inferred_length = helpers.safe_infer(node.args[1], context=context)
+    if not isinstance(inferred_length, Const):
         raise UseInferenceDefault
-    if not isinstance(length.value, int):
+    if not isinstance(inferred_length.value, int):
         raise UseInferenceDefault
 
     inferred_sequence = helpers.safe_infer(node.args[0], context=context)
@@ -53,12 +58,12 @@ def infer_random_sample(node, context=None):
     if not isinstance(inferred_sequence, ACCEPTED_ITERABLES_FOR_SAMPLE):
         raise UseInferenceDefault
 
-    if length.value > len(inferred_sequence.elts):
+    if inferred_length.value > len(inferred_sequence.elts):
         # In this case, this will raise a ValueError
         raise UseInferenceDefault
 
     try:
-        elts = random.sample(inferred_sequence.elts, length.value)
+        elts = random.sample(inferred_sequence.elts, inferred_length.value)
     except ValueError as exc:
         raise UseInferenceDefault from exc
 
@@ -71,7 +76,7 @@ def infer_random_sample(node, context=None):
     return iter((new_node,))
 
 
-def _looks_like_random_sample(node):
+def _looks_like_random_sample(node) -> bool:
     func = node.func
     if isinstance(func, Attribute):
         return func.attrname == "sample"

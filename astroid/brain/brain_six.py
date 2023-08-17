@@ -1,16 +1,6 @@
-# Copyright (c) 2014-2016, 2018, 2020 Claudiu Popa <pcmanticore@gmail.com>
-# Copyright (c) 2015-2016 Ceridwen <ceridwenv@gmail.com>
-# Copyright (c) 2018 Bryce Guinta <bryce.paul.guinta@gmail.com>
-# Copyright (c) 2020-2021 hippo91 <guillaume.peillex@gmail.com>
-# Copyright (c) 2020 Ram Rachum <ram@rachum.com>
-# Copyright (c) 2021 Pierre Sassoulas <pierre.sassoulas@gmail.com>
-# Copyright (c) 2021 Marc Mueller <30130371+cdce8p@users.noreply.github.com>
-# Copyright (c) 2021 Artsiom Kaval <lezeroq@gmail.com>
-# Copyright (c) 2021 Francis Charette Migneault <francis.charette.migneault@gmail.com>
-
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
 # For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-
+# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
 
 """Astroid hooks for six module."""
 
@@ -34,7 +24,7 @@ def default_predicate(line):
     return line.strip()
 
 
-def _indent(text, prefix, predicate=default_predicate):
+def _indent(text, prefix, predicate=default_predicate) -> str:
     """Adds 'prefix' to the beginning of selected lines in 'text'.
 
     If 'predicate' is provided, 'prefix' will only be added to the lines
@@ -164,7 +154,7 @@ def _six_fail_hook(modname):
     return module
 
 
-def _looks_like_decorated_with_six_add_metaclass(node):
+def _looks_like_decorated_with_six_add_metaclass(node) -> bool:
     if not node.decorators:
         return False
 
@@ -177,7 +167,7 @@ def _looks_like_decorated_with_six_add_metaclass(node):
 
 
 def transform_six_add_metaclass(node):  # pylint: disable=inconsistent-return-statements
-    """Check if the given class node is decorated with *six.add_metaclass*
+    """Check if the given class node is decorated with *six.add_metaclass*.
 
     If so, inject its argument as the metaclass of the underlying class.
     """
@@ -199,7 +189,7 @@ def transform_six_add_metaclass(node):  # pylint: disable=inconsistent-return-st
     return
 
 
-def _looks_like_nested_from_six_with_metaclass(node):
+def _looks_like_nested_from_six_with_metaclass(node) -> bool:
     if len(node.bases) != 1:
         return False
     base = node.bases[0]
@@ -223,7 +213,7 @@ def _looks_like_nested_from_six_with_metaclass(node):
 
 
 def transform_six_with_metaclass(node):
-    """Check if the given class node is defined with *six.with_metaclass*
+    """Check if the given class node is defined with *six.with_metaclass*.
 
     If so, inject its argument as the metaclass of the underlying class.
     """

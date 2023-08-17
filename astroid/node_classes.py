@@ -1,3 +1,7 @@
+# Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
+# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+
 # pylint: disable=unused-import
 
 import warnings
@@ -72,6 +76,7 @@ from astroid.nodes.node_classes import (  # pylint: disable=redefined-builtin (E
     Subscript,
     TryExcept,
     TryFinally,
+    TryStar,
     Tuple,
     UnaryOp,
     Unknown,
@@ -88,6 +93,8 @@ from astroid.nodes.node_classes import (  # pylint: disable=redefined-builtin (E
 # Please remove astroid/scoped_nodes.py|astroid/node_classes.py in autoflake
 # exclude when removing this file.
 warnings.warn(
-    "The 'astroid.node_classes' module is deprecated and will be replaced by 'astroid.nodes' in astroid 3.0.0",
+    "The 'astroid.node_classes' module is deprecated and will be replaced by "
+    "'astroid.nodes' in astroid 3.0.0",
     DeprecationWarning,
+    stacklevel=2,
 )

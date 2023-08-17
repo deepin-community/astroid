@@ -1,33 +1,44 @@
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
 # For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
 
-"""Transform utilities (filters and decorator)"""
+"""Transform utilities (filters and decorator)."""
+
+from __future__ import annotations
 
 import typing
+from collections.abc import Iterator
 
 import wrapt
 
-from astroid.exceptions import InferenceOverwriteError
+from astroid.exceptions import InferenceOverwriteError, UseInferenceDefault
 from astroid.nodes import NodeNG
+from astroid.typing import InferenceResult, InferFn
 
-InferFn = typing.Callable[..., typing.Any]
-
-_cache: typing.Dict[typing.Tuple[InferFn, NodeNG], typing.Any] = {}
+_cache: dict[tuple[InferFn, NodeNG], list[InferenceResult] | None] = {}
 
 
-def clear_inference_tip_cache():
+def clear_inference_tip_cache() -> None:
     """Clear the inference tips cache."""
     _cache.clear()
 
 
 @wrapt.decorator
-def _inference_tip_cached(func, instance, args, kwargs):
-    """Cache decorator used for inference tips"""
+def _inference_tip_cached(
+    func: InferFn, instance: None, args: typing.Any, kwargs: typing.Any
+) -> Iterator[InferenceResult]:
+    """Cache decorator used for inference tips."""
     node = args[0]
     try:
         result = _cache[func, node]
+        # If through recursion we end up trying to infer the same
+        # func + node we raise here.
+        if result is None:
+            raise UseInferenceDefault()
     except KeyError:
+        _cache[func, node] = None
         result = _cache[func, node] = list(func(*args, **kwargs))
+        assert result
     return iter(result)
 
 
