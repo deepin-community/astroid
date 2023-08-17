@@ -1,5 +1,7 @@
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
 # For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+
 """Astroid hooks for the signal library.
 
 The signal module generates the 'Signals', 'Handlers' and 'Sigmasks' IntEnums
@@ -35,7 +37,7 @@ def _signals_enums_transform():
     return parse(_signals_enum() + _handlers_enum() + _sigmasks_enum())
 
 
-def _signals_enum():
+def _signals_enum() -> str:
     """Generates the source code for the Signals int enum."""
     signals_enum = """
     import enum
@@ -91,7 +93,7 @@ def _signals_enum():
     return signals_enum
 
 
-def _handlers_enum():
+def _handlers_enum() -> str:
     """Generates the source code for the Handlers int enum."""
     return """
     import enum
@@ -101,7 +103,7 @@ def _handlers_enum():
     """
 
 
-def _sigmasks_enum():
+def _sigmasks_enum() -> str:
     """Generates the source code for the Sigmasks int enum."""
     if sys.platform != "win32":
         return """

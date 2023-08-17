@@ -1,22 +1,19 @@
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
 # For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-
-# Copyright (c) 2017-2018 Claudiu Popa <pcmanticore@gmail.com>
-# Copyright (c) 2017 Łukasz Rogalski <rogalski.91@gmail.com>
-# Copyright (c) 2017 David Euresti <github@euresti.com>
-# Copyright (c) 2018 Bryce Guinta <bryce.paul.guinta@gmail.com>
-# Copyright (c) 2021 Redoubts <Redoubts@users.noreply.github.com>
-# Copyright (c) 2021 Pierre Sassoulas <pierre.sassoulas@gmail.com>
-# Copyright (c) 2021 Marc Mueller <30130371+cdce8p@users.noreply.github.com>
-# Copyright (c) 2021 Tim Martin <tim@asymptotic.co.uk>
-# Copyright (c) 2021 hippo91 <guillaume.peillex@gmail.com>
+# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
 
 """Astroid hooks for typing.py support."""
+
+from __future__ import annotations
+
+import sys
 import typing
+from collections.abc import Iterator
 from functools import partial
 
 from astroid import context, extract_node, inference_tip
-from astroid.const import PY37_PLUS, PY38_PLUS, PY39_PLUS
+from astroid.builder import _extract_single_node
+from astroid.const import PY38_PLUS, PY39_PLUS
 from astroid.exceptions import (
     AttributeInferenceError,
     InferenceError,
@@ -29,17 +26,26 @@ from astroid.nodes.node_classes import (
     Attribute,
     Call,
     Const,
+    JoinedStr,
     Name,
     NodeNG,
     Subscript,
     Tuple,
 )
 from astroid.nodes.scoped_nodes import ClassDef, FunctionDef
-from astroid.util import Uninferable
 
-TYPING_NAMEDTUPLE_BASENAMES = {"NamedTuple", "typing.NamedTuple"}
+if sys.version_info >= (3, 8):
+    from typing import Final
+else:
+    from typing_extensions import Final
+
 TYPING_TYPEVARS = {"TypeVar", "NewType"}
-TYPING_TYPEVARS_QUALIFIED = {"typing.TypeVar", "typing.NewType"}
+TYPING_TYPEVARS_QUALIFIED: Final = {
+    "typing.TypeVar",
+    "typing.NewType",
+    "typing_extensions.TypeVar",
+}
+TYPING_TYPEDDICT_QUALIFIED: Final = {"typing.TypedDict", "typing_extensions.TypedDict"}
 TYPING_TYPE_TEMPLATE = """
 class Meta(type):
     def __getitem__(self, item):
@@ -52,7 +58,7 @@ class Meta(type):
 class {0}(metaclass=Meta):
     pass
 """
-TYPING_MEMBERS = set(typing.__all__)
+TYPING_MEMBERS = set(getattr(typing, "__all__", []))
 
 TYPING_ALIAS = frozenset(
     (
@@ -106,7 +112,7 @@ def __class_getitem__(cls, item):
 """
 
 
-def looks_like_typing_typevar_or_newtype(node):
+def looks_like_typing_typevar_or_newtype(node) -> bool:
     func = node.func
     if isinstance(func, Attribute):
         return func.attrname in TYPING_TYPEVARS
@@ -116,7 +122,7 @@ def looks_like_typing_typevar_or_newtype(node):
 
 
 def infer_typing_typevar_or_newtype(node, context_itton=None):
-    """Infer a typing.TypeVar(...) or typing.NewType(...) call"""
+    """Infer a typing.TypeVar(...) or typing.NewType(...) call."""
     try:
         func = next(node.func.infer(context=context_itton))
     except (InferenceError, StopIteration) as exc:
@@ -126,14 +132,17 @@ def infer_typing_typevar_or_newtype(node, context_itton=None):
         raise UseInferenceDefault
     if not node.args:
         raise UseInferenceDefault
+    # Cannot infer from a dynamic class name (f-string)
+    if isinstance(node.args[0], JoinedStr):
+        raise UseInferenceDefault
 
     typename = node.args[0].as_string().strip("'")
     node = extract_node(TYPING_TYPE_TEMPLATE.format(typename))
     return node.infer(context=context_itton)
 
 
-def _looks_like_typing_subscript(node):
-    """Try to figure out if a Subscript node *might* be a typing-related subscript"""
+def _looks_like_typing_subscript(node) -> bool:
+    """Try to figure out if a Subscript node *might* be a typing-related subscript."""
     if isinstance(node, Name):
         return node.name in TYPING_MEMBERS
     if isinstance(node, Attribute):
@@ -144,33 +153,27 @@ def _looks_like_typing_subscript(node):
 
 
 def infer_typing_attr(
-    node: Subscript, ctx: context.InferenceContext = None
-) -> typing.Iterator[ClassDef]:
-    """Infer a typing.X[...] subscript"""
+    node: Subscript, ctx: context.InferenceContext | None = None
+) -> Iterator[ClassDef]:
+    """Infer a typing.X[...] subscript."""
     try:
-        value = next(node.value.infer())
+        value = next(node.value.infer())  # type: ignore[union-attr] # value shouldn't be None for Subscript.
     except (InferenceError, StopIteration) as exc:
         raise UseInferenceDefault from exc
 
-    if (
-        not value.qname().startswith("typing.")
-        or PY37_PLUS
-        and value.qname() in TYPING_ALIAS
-    ):
-        # If typing subscript belongs to an alias
-        # (PY37+) handle it separately.
+    if not value.qname().startswith("typing.") or value.qname() in TYPING_ALIAS:
+        # If typing subscript belongs to an alias handle it separately.
         raise UseInferenceDefault
 
-    if (
-        PY37_PLUS
-        and isinstance(value, ClassDef)
-        and value.qname()
-        in {"typing.Generic", "typing.Annotated", "typing_extensions.Annotated"}
-    ):
-        # With PY37+ typing.Generic and typing.Annotated (PY39) are subscriptable
+    if isinstance(value, ClassDef) and value.qname() in {
+        "typing.Generic",
+        "typing.Annotated",
+        "typing_extensions.Annotated",
+    }:
+        # typing.Generic and typing.Annotated (PY39) are subscriptable
         # through __class_getitem__. Since astroid can't easily
         # infer the native methods, replace them for an easy inference tip
-        func_to_add = extract_node(CLASS_GETITEM_TEMPLATE)
+        func_to_add = _extract_single_node(CLASS_GETITEM_TEMPLATE)
         value.locals["__class_getitem__"] = [func_to_add]
         if (
             isinstance(node.parent, ClassDef)
@@ -179,7 +182,7 @@ def infer_typing_attr(
         ):
             # node.parent.slots is evaluated and cached before the inference tip
             # is first applied. Remove the last result to allow a recalculation of slots
-            cache = node.parent.__cache
+            cache = node.parent.__cache  # type: ignore[attr-defined] # Unrecognized getattr
             if cache.get(node.parent.slots) is not None:
                 del cache[node.parent.slots]
         return iter([value])
@@ -189,23 +192,23 @@ def infer_typing_attr(
 
 
 def _looks_like_typedDict(  # pylint: disable=invalid-name
-    node: typing.Union[FunctionDef, ClassDef],
+    node: FunctionDef | ClassDef,
 ) -> bool:
     """Check if node is TypedDict FunctionDef."""
-    return node.qname() in {"typing.TypedDict", "typing_extensions.TypedDict"}
+    return node.qname() in TYPING_TYPEDDICT_QUALIFIED
 
 
 def infer_old_typedDict(  # pylint: disable=invalid-name
-    node: ClassDef, ctx: context.InferenceContext = None
-) -> typing.Iterator[ClassDef]:
-    func_to_add = extract_node("dict")
+    node: ClassDef, ctx: context.InferenceContext | None = None
+) -> Iterator[ClassDef]:
+    func_to_add = _extract_single_node("dict")
     node.locals["__call__"] = [func_to_add]
     return iter([node])
 
 
 def infer_typedDict(  # pylint: disable=invalid-name
-    node: FunctionDef, ctx: context.InferenceContext = None
-) -> typing.Iterator[ClassDef]:
+    node: FunctionDef, ctx: context.InferenceContext | None = None
+) -> Iterator[ClassDef]:
     """Replace TypedDict FunctionDef with ClassDef."""
     class_def = ClassDef(
         name="TypedDict",
@@ -214,7 +217,7 @@ def infer_typedDict(  # pylint: disable=invalid-name
         parent=node.parent,
     )
     class_def.postinit(bases=[extract_node("dict")], body=[], decorators=None)
-    func_to_add = extract_node("dict")
+    func_to_add = _extract_single_node("dict")
     class_def.locals["__call__"] = [func_to_add]
     return iter([class_def])
 
@@ -222,6 +225,7 @@ def infer_typedDict(  # pylint: disable=invalid-name
 def _looks_like_typing_alias(node: Call) -> bool:
     """
     Returns True if the node corresponds to a call to _alias function.
+
     For example :
 
     MutableSet = _alias(collections.abc.MutableSet, T)
@@ -239,14 +243,12 @@ def _looks_like_typing_alias(node: Call) -> bool:
 
 
 def _forbid_class_getitem_access(node: ClassDef) -> None:
-    """
-    Disable the access to __class_getitem__ method for the node in parameters
-    """
+    """Disable the access to __class_getitem__ method for the node in parameters."""
 
     def full_raiser(origin_func, attr, *args, **kwargs):
         """
         Raises an AttributeInferenceError in case of access to __class_getitem__ method.
-        Otherwise just call origin_func.
+        Otherwise, just call origin_func.
         """
         if attr == "__class_getitem__":
             raise AttributeInferenceError("__class_getitem__ access is not allowed")
@@ -254,8 +256,9 @@ def _forbid_class_getitem_access(node: ClassDef) -> None:
 
     try:
         node.getattr("__class_getitem__")
-        # If we are here, then we are sure to modify object that do have __class_getitem__ method (which origin is one the
-        # protocol defined in collections module) whereas the typing module consider it should not
+        # If we are here, then we are sure to modify an object that does have
+        # __class_getitem__ method (which origin is the protocol defined in
+        # collections module) whereas the typing module considers it should not.
         # We do not want __class_getitem__ to be found in the classdef
         partial_raiser = partial(full_raiser, node.getattr)
         node.getattr = partial_raiser
@@ -264,8 +267,8 @@ def _forbid_class_getitem_access(node: ClassDef) -> None:
 
 
 def infer_typing_alias(
-    node: Call, ctx: context.InferenceContext = None
-) -> typing.Iterator[ClassDef]:
+    node: Call, ctx: context.InferenceContext | None = None
+) -> Iterator[ClassDef]:
     """
     Infers the call to _alias function
     Insert ClassDef, with same name as aliased class,
@@ -283,7 +286,7 @@ def infer_typing_alias(
     try:
         res = next(node.args[0].infer(context=ctx))
     except StopIteration as e:
-        raise InferenceError(node=node.args[0], context=context) from e
+        raise InferenceError(node=node.args[0], context=ctx) from e
 
     assign_name = node.parent.targets[0]
 
@@ -293,7 +296,7 @@ def infer_typing_alias(
         col_offset=assign_name.col_offset,
         parent=node.parent,
     )
-    if res != Uninferable and isinstance(res, ClassDef):
+    if isinstance(res, ClassDef):
         # Only add `res` as base if it's a `ClassDef`
         # This isn't the case for `typing.Pattern` and `typing.Match`
         class_def.postinit(bases=[res], body=[], decorators=None)
@@ -307,7 +310,7 @@ def infer_typing_alias(
         and maybe_type_var.value > 0
     ):
         # If typing alias is subscriptable, add `__class_getitem__` to ClassDef
-        func_to_add = extract_node(CLASS_GETITEM_TEMPLATE)
+        func_to_add = _extract_single_node(CLASS_GETITEM_TEMPLATE)
         class_def.locals["__class_getitem__"] = [func_to_add]
     else:
         # If not, make sure that `__class_getitem__` access is forbidden.
@@ -325,7 +328,6 @@ def _looks_like_special_alias(node: Call) -> bool:
 
     PY37: Tuple = _VariadicGenericAlias(tuple, (), inst=False, special=True)
     PY39: Tuple = _TupleType(tuple, -1, inst=False, name='Tuple')
-
 
     PY37: Callable = _VariadicGenericAlias(collections.abc.Callable, (), special=True)
     PY39: Callable = _CallableType(collections.abc.Callable, 2)
@@ -352,8 +354,8 @@ def _looks_like_special_alias(node: Call) -> bool:
 
 
 def infer_special_alias(
-    node: Call, ctx: context.InferenceContext = None
-) -> typing.Iterator[ClassDef]:
+    node: Call, ctx: context.InferenceContext | None = None
+) -> Iterator[ClassDef]:
     """Infer call to tuple alias as new subscriptable class typing.Tuple."""
     if not (
         isinstance(node.parent, Assign)
@@ -364,7 +366,7 @@ def infer_special_alias(
     try:
         res = next(node.args[0].infer(context=ctx))
     except StopIteration as e:
-        raise InferenceError(node=node.args[0], context=context) from e
+        raise InferenceError(node=node.args[0], context=ctx) from e
 
     assign_name = node.parent.targets[0]
     class_def = ClassDef(
@@ -372,7 +374,7 @@ def infer_special_alias(
         parent=node.parent,
     )
     class_def.postinit(bases=[res], body=[], decorators=None)
-    func_to_add = extract_node(CLASS_GETITEM_TEMPLATE)
+    func_to_add = _extract_single_node(CLASS_GETITEM_TEMPLATE)
     class_def.locals["__class_getitem__"] = [func_to_add]
     return iter([class_def])
 
@@ -387,9 +389,9 @@ def _looks_like_typing_cast(node: Call) -> bool:
 
 
 def infer_typing_cast(
-    node: Call, ctx: context.InferenceContext = None
-) -> typing.Iterator[NodeNG]:
-    """Infer call to cast() returning same type as casted-from var"""
+    node: Call, ctx: context.InferenceContext | None = None
+) -> Iterator[NodeNG]:
+    """Infer call to cast() returning same type as casted-from var."""
     if not isinstance(node.func, (Name, Attribute)):
         raise UseInferenceDefault
 
@@ -428,10 +430,9 @@ elif PY38_PLUS:
         ClassDef, inference_tip(infer_old_typedDict), _looks_like_typedDict
     )
 
-if PY37_PLUS:
-    AstroidManager().register_transform(
-        Call, inference_tip(infer_typing_alias), _looks_like_typing_alias
-    )
-    AstroidManager().register_transform(
-        Call, inference_tip(infer_special_alias), _looks_like_special_alias
-    )
+AstroidManager().register_transform(
+    Call, inference_tip(infer_typing_alias), _looks_like_typing_alias
+)
+AstroidManager().register_transform(
+    Call, inference_tip(infer_special_alias), _looks_like_special_alias
+)

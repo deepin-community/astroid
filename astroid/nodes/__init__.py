@@ -1,18 +1,6 @@
-# Copyright (c) 2006-2011, 2013 LOGILAB S.A. (Paris, FRANCE) <contact@logilab.fr>
-# Copyright (c) 2010 Daniel Harding <dharding@gmail.com>
-# Copyright (c) 2014-2020 Claudiu Popa <pcmanticore@gmail.com>
-# Copyright (c) 2014 Google, Inc.
-# Copyright (c) 2015-2016 Ceridwen <ceridwenv@gmail.com>
-# Copyright (c) 2016 Jared Garst <jgarst@users.noreply.github.com>
-# Copyright (c) 2017 Ashley Whetter <ashley@awhetter.co.uk>
-# Copyright (c) 2017 rr- <rr-@sakuya.pl>
-# Copyright (c) 2018 Bryce Guinta <bryce.paul.guinta@gmail.com>
-# Copyright (c) 2021 Pierre Sassoulas <pierre.sassoulas@gmail.com>
-# Copyright (c) 2021 Daniël van Noord <13665637+DanielNoord@users.noreply.github.com>
-# Copyright (c) 2021 Marc Mueller <30130371+cdce8p@users.noreply.github.com>
-
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
 # For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
 
 """Every available node class.
 
@@ -24,6 +12,9 @@ All nodes inherit from :class:`~astroid.nodes.node_classes.NodeNG`.
 
 # Nodes not present in the builtin ast module:  DictUnpack, Unknown, and EvaluatedObject.
 
+# This is the only node we re-export from the private _base_nodes module. This
+# is because it was originally part of the public API and hasn't been deprecated.
+from astroid.nodes._base_nodes import Statement
 from astroid.nodes.node_classes import (  # pylint: disable=redefined-builtin (Ellipsis)
     CONST_CLS,
     AnnAssign,
@@ -90,10 +81,10 @@ from astroid.nodes.node_classes import (  # pylint: disable=redefined-builtin (E
     Set,
     Slice,
     Starred,
-    Statement,
     Subscript,
     TryExcept,
     TryFinally,
+    TryStar,
     Tuple,
     UnaryOp,
     Unknown,
@@ -121,6 +112,7 @@ from astroid.nodes.scoped_nodes import (
     function_to_method,
     get_wrapping_class,
 )
+from astroid.nodes.utils import Position
 
 _BaseContainer = BaseContainer  # TODO Remove for astroid 3.0
 
@@ -205,6 +197,7 @@ ALL_NODE_CLASSES = (
     Subscript,
     TryExcept,
     TryFinally,
+    TryStar,
     Tuple,
     UnaryOp,
     Unknown,
@@ -288,6 +281,7 @@ __all__ = (
     "NodeNG",
     "Nonlocal",
     "Pass",
+    "Position",
     "Raise",
     "Return",
     "Set",
@@ -298,6 +292,7 @@ __all__ = (
     "Subscript",
     "TryExcept",
     "TryFinally",
+    "TryStar",
     "Tuple",
     "UnaryOp",
     "Unknown",

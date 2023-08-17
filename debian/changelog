@@ -1,3 +1,84 @@
+astroid (2.15.6-1) unstable; urgency=medium
+
+  * New upstream release; Closes: #1041883
+  * debian/control
+    - add pip to b-d, needed by tests
+
+ -- Sandro Tosi <morph@debian.org>  Wed, 26 Jul 2023 02:30:02 -0400
+
+astroid (2.14.2-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Sandro Tosi <morph@debian.org>  Fri, 24 Feb 2023 16:23:18 -0500
+
+astroid (2.13.3-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/control
+    - build using pybuild-plugin-pyproject
+    - bump Standards-Version to 4.6.2.0 (no changes needed)
+  * debian/copyright
+    - extend packaging copyright years
+
+ -- Sandro Tosi <morph@debian.org>  Sun, 22 Jan 2023 00:20:47 -0500
+
+astroid (2.12.13-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/control
+    - bump Standards-Version to 4.6.1.0 (no changes needed)
+
+ -- Sandro Tosi <morph@debian.org>  Sat, 10 Dec 2022 00:25:21 -0500
+
+astroid (2.12.12-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Sandro Tosi <morph@debian.org>  Sat, 22 Oct 2022 20:19:27 -0400
+
+astroid (2.12.10-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Sandro Tosi <morph@debian.org>  Fri, 23 Sep 2022 09:42:48 -0400
+
+astroid (2.12.2-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/copyright
+    - refresh copyright
+
+ -- Sandro Tosi <morph@debian.org>  Fri, 23 Sep 2022 00:23:37 -0400
+
+astroid (2.9.3-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/copyright
+    - add copyright/license notices for test files too
+
+ -- Sandro Tosi <morph@debian.org>  Tue, 25 Jan 2022 23:47:04 -0500
+
+astroid (2.9.2-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/rules
+    - re-enable test_oserror, fixed upstream in PR #1254
+    - stop copying/removing pytest.ini, no longer available nor needed
+  * debian/copyright
+    - extend packaging copyright years
+    - update upstream copyright info
+
+ -- Sandro Tosi <morph@debian.org>  Tue, 04 Jan 2022 21:49:35 -0500
+
+astroid (2.9.0-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/copyright
+    - update upstream copyright info
+
+ -- Sandro Tosi <morph@debian.org>  Sun, 05 Dec 2021 01:26:08 -0500
+
 astroid (2.8.4-1) unstable; urgency=medium
 
   * New upstream release

@@ -1,27 +1,18 @@
-# Copyright (c) 2015-2016, 2018-2020 Claudiu Popa <pcmanticore@gmail.com>
-# Copyright (c) 2015-2016 Ceridwen <ceridwenv@gmail.com>
-# Copyright (c) 2018 Bryce Guinta <bryce.paul.guinta@gmail.com>
-# Copyright (c) 2018 Nick Drozd <nicholasdrozd@gmail.com>
-# Copyright (c) 2018 Anthony Sottile <asottile@umich.edu>
-# Copyright (c) 2020 hippo91 <guillaume.peillex@gmail.com>
-# Copyright (c) 2021 Pierre Sassoulas <pierre.sassoulas@gmail.com>
-# Copyright (c) 2021 David Liu <david@cs.toronto.edu>
-# Copyright (c) 2021 Marc Mueller <30130371+cdce8p@users.noreply.github.com>
-
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
 # For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-from typing import Optional
+# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+
+from __future__ import annotations
 
 from astroid import nodes
 from astroid.bases import Instance
-from astroid.const import Context
 from astroid.context import CallContext, InferenceContext
 from astroid.exceptions import InferenceError, NoDefault
-from astroid.util import Uninferable
+from astroid.util import Uninferable, UninferableBase
 
 
 class CallSite:
-    """Class for understanding arguments passed into a call site
+    """Class for understanding arguments passed into a call site.
 
     It needs a call context, which contains the arguments and the
     keyword arguments that were passed into a given call site.
@@ -38,28 +29,31 @@ class CallSite:
     """
 
     def __init__(
-        self, callcontext: CallContext, argument_context_map=None, context=None
+        self,
+        callcontext: CallContext,
+        argument_context_map=None,
+        context: InferenceContext | None = None,
     ):
         if argument_context_map is None:
             argument_context_map = {}
         self.argument_context_map = argument_context_map
         args = callcontext.args
         keywords = callcontext.keywords
-        self.duplicated_keywords = set()
+        self.duplicated_keywords: set[str] = set()
         self._unpacked_args = self._unpack_args(args, context=context)
         self._unpacked_kwargs = self._unpack_keywords(keywords, context=context)
 
         self.positional_arguments = [
-            arg for arg in self._unpacked_args if arg is not Uninferable
+            arg for arg in self._unpacked_args if not isinstance(arg, UninferableBase)
         ]
         self.keyword_arguments = {
             key: value
             for key, value in self._unpacked_kwargs.items()
-            if value is not Uninferable
+            if not isinstance(value, UninferableBase)
         }
 
     @classmethod
-    def from_call(cls, call_node, context: Optional[Context] = None):
+    def from_call(cls, call_node, context: InferenceContext | None = None):
         """Get a CallSite object from the given Call node.
 
         context will be used to force a single inference path.
@@ -71,7 +65,7 @@ class CallSite:
         return cls(callcontext, context=context)
 
     def has_invalid_arguments(self):
-        """Check if in the current CallSite were passed *invalid* arguments
+        """Check if in the current CallSite were passed *invalid* arguments.
 
         This can mean multiple things. For instance, if an unpacking
         of an invalid object was passed, then this method will return True.
@@ -80,8 +74,8 @@ class CallSite:
         """
         return len(self.positional_arguments) != len(self._unpacked_args)
 
-    def has_invalid_keywords(self):
-        """Check if in the current CallSite were passed *invalid* keyword arguments
+    def has_invalid_keywords(self) -> bool:
+        """Check if in the current CallSite were passed *invalid* keyword arguments.
 
         For instance, unpacking a dictionary with integer keys is invalid
         (**{1:2}), because the keys must be strings, which will make this
@@ -90,7 +84,7 @@ class CallSite:
         """
         return len(self.keyword_arguments) != len(self._unpacked_kwargs)
 
-    def _unpack_keywords(self, keywords, context=None):
+    def _unpack_keywords(self, keywords, context: InferenceContext | None = None):
         values = {}
         context = context or InferenceContext()
         context.extra_context = self.argument_context_map
@@ -134,7 +128,7 @@ class CallSite:
                 values[name] = value
         return values
 
-    def _unpack_args(self, args, context=None):
+    def _unpack_args(self, args, context: InferenceContext | None = None):
         values = []
         context = context or InferenceContext()
         context.extra_context = self.argument_context_map
@@ -148,7 +142,7 @@ class CallSite:
                 except StopIteration:
                     continue
 
-                if inferred is Uninferable:
+                if isinstance(inferred, UninferableBase):
                     values.append(Uninferable)
                     continue
                 if not hasattr(inferred, "elts"):
@@ -159,8 +153,8 @@ class CallSite:
                 values.append(arg)
         return values
 
-    def infer_argument(self, funcnode, name, context):
-        """infer a function argument value according to the call context
+    def infer_argument(self, funcnode, name, context):  # noqa: C901
+        """Infer a function argument value according to the call context.
 
         Arguments:
             funcnode: The function being called.
@@ -169,7 +163,7 @@ class CallSite:
         """
         if name in self.duplicated_keywords:
             raise InferenceError(
-                "The arguments passed to {func!r} " " have duplicate keywords.",
+                "The arguments passed to {func!r} have duplicate keywords.",
                 call_site=self,
                 func=funcnode,
                 arg=name,
@@ -226,7 +220,7 @@ class CallSite:
                     return positional[0].infer(context=context)
                 if boundnode is None:
                     # XXX can do better ?
-                    boundnode = funcnode.parent.frame()
+                    boundnode = funcnode.parent.frame(future=True)
 
                 if isinstance(boundnode, nodes.ClassDef):
                     # Verify that we're accessing a method

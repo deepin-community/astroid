@@ -1,8 +1,6 @@
-# Copyright (c) 2016-2018 Claudiu Popa <pcmanticore@gmail.com>
-# Copyright (c) 2021 Pierre Sassoulas <pierre.sassoulas@gmail.com>
-# Copyright (c) 2021 Marc Mueller <30130371+cdce8p@users.noreply.github.com>
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
 # For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
 
 """Contains logic for retrieving special methods.
 
@@ -20,7 +18,7 @@ import astroid
 from astroid.exceptions import AttributeInferenceError
 
 
-def _lookup_in_mro(node, name):
+def _lookup_in_mro(node, name) -> list:
     attrs = node.locals.get(name, [])
 
     nodes = itertools.chain.from_iterable(
@@ -33,8 +31,8 @@ def _lookup_in_mro(node, name):
     return values
 
 
-def lookup(node, name):
-    """Lookup the given special method name in the given *node*
+def lookup(node, name) -> list:
+    """Lookup the given special method name in the given *node*.
 
     If the special method was found, then a list of attributes
     will be returned. Otherwise, `astroid.AttributeInferenceError`
@@ -52,7 +50,7 @@ def lookup(node, name):
     raise AttributeInferenceError(attribute=name, target=node)
 
 
-def _class_lookup(node, name):
+def _class_lookup(node, name) -> list:
     metaclass = node.metaclass()
     if metaclass is None:
         raise AttributeInferenceError(attribute=name, target=node)
@@ -60,7 +58,7 @@ def _class_lookup(node, name):
     return _lookup_in_mro(metaclass, name)
 
 
-def _builtin_lookup(node, name):
+def _builtin_lookup(node, name) -> list:
     values = node.locals.get(name, [])
     if not values:
         raise AttributeInferenceError(attribute=name, target=node)

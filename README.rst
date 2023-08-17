@@ -1,9 +1,9 @@
 Astroid
 =======
 
-.. image:: https://coveralls.io/repos/github/PyCQA/astroid/badge.svg?branch=main
-    :target: https://coveralls.io/github/PyCQA/astroid?branch=main
-    :alt: Coverage badge from coveralls.io
+.. image:: https://codecov.io/gh/PyCQA/astroid/branch/main/graph/badge.svg?token=Buxy4WptLb
+    :target: https://codecov.io/gh/PyCQA/astroid
+    :alt: Coverage badge from codecov
 
 .. image:: https://readthedocs.org/projects/astroid/badge/?version=latest
     :target: http://astroid.readthedocs.io/en/latest/?badge=latest
@@ -17,8 +17,7 @@ Astroid
    :alt: pre-commit.ci status
 
 .. |tidelift_logo| image:: https://raw.githubusercontent.com/PyCQA/astroid/main/doc/media/Tidelift_Logos_RGB_Tidelift_Shorthand_On-White.png
-   :width: 75
-   :height: 60
+   :width: 200
    :alt: Tidelift
 
 .. list-table::
@@ -87,4 +86,4 @@ Tests are in the 'test' subdirectory. To launch the whole tests suite, you can u
 either `tox` or `pytest`::
 
     tox
-    pytest astroid
+    pytest

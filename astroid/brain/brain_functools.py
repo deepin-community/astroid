@@ -1,21 +1,24 @@
-# Copyright (c) 2016, 2018-2020 Claudiu Popa <pcmanticore@gmail.com>
-# Copyright (c) 2018 hippo91 <guillaume.peillex@gmail.com>
-# Copyright (c) 2018 Bryce Guinta <bryce.paul.guinta@gmail.com>
-# Copyright (c) 2021 Pierre Sassoulas <pierre.sassoulas@gmail.com>
-# Copyright (c) 2021 Alphadelta14 <alpha@alphaservcomputing.solutions>
+# Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
+# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
 
 """Astroid hooks for understanding functools library module."""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
 from functools import partial
 from itertools import chain
 
-from astroid import BoundMethod, arguments, extract_node, helpers, objects
+from astroid import BoundMethod, arguments, extract_node, helpers, nodes, objects
+from astroid.context import InferenceContext
 from astroid.exceptions import InferenceError, UseInferenceDefault
 from astroid.inference_tip import inference_tip
 from astroid.interpreter import objectmodel
 from astroid.manager import AstroidManager
 from astroid.nodes.node_classes import AssignName, Attribute, Call, Name
 from astroid.nodes.scoped_nodes import FunctionDef
-from astroid.util import Uninferable
+from astroid.util import UninferableBase
 
 LRU_CACHE = "functools.lru_cache"
 
@@ -41,7 +44,9 @@ class LruWrappedModel(objectmodel.FunctionModel):
         )
 
         class CacheInfoBoundMethod(BoundMethod):
-            def infer_call_result(self, caller, context=None):
+            def infer_call_result(
+                self, caller, context: InferenceContext | None = None
+            ):
                 yield helpers.safe_infer(cache_info)
 
         return CacheInfoBoundMethod(proxy=self._instance, bound=self._instance)
@@ -52,7 +57,7 @@ class LruWrappedModel(objectmodel.FunctionModel):
         return BoundMethod(proxy=node, bound=self._instance.parent.scope())
 
 
-def _transform_lru_cache(node, context=None) -> None:
+def _transform_lru_cache(node, context: InferenceContext | None = None) -> None:
     # TODO: this is not ideal, since the node should be immutable,
     # but due to https://github.com/PyCQA/astroid/issues/354,
     # there's not much we can do now.
@@ -62,7 +67,9 @@ def _transform_lru_cache(node, context=None) -> None:
     node.special_attributes = LruWrappedModel()(node)
 
 
-def _functools_partial_inference(node, context=None):
+def _functools_partial_inference(
+    node: nodes.Call, context: InferenceContext | None = None
+) -> Iterator[objects.PartialFunction]:
     call = arguments.CallSite.from_call(node, context=context)
     number_of_positional = len(call.positional_arguments)
     if number_of_positional < 1:
@@ -77,7 +84,7 @@ def _functools_partial_inference(node, context=None):
         inferred_wrapped_function = next(partial_function.infer(context=context))
     except (InferenceError, StopIteration) as exc:
         raise UseInferenceDefault from exc
-    if inferred_wrapped_function is Uninferable:
+    if isinstance(inferred_wrapped_function, UninferableBase):
         raise UseInferenceDefault("Cannot infer the wrapped function")
     if not isinstance(inferred_wrapped_function, FunctionDef):
         raise UseInferenceDefault("The wrapped function is not a function")
@@ -101,7 +108,6 @@ def _functools_partial_inference(node, context=None):
     partial_function = objects.PartialFunction(
         call,
         name=inferred_wrapped_function.name,
-        doc=inferred_wrapped_function.doc,
         lineno=inferred_wrapped_function.lineno,
         col_offset=inferred_wrapped_function.col_offset,
         parent=node.parent,
@@ -113,11 +119,12 @@ def _functools_partial_inference(node, context=None):
         returns=inferred_wrapped_function.returns,
         type_comment_returns=inferred_wrapped_function.type_comment_returns,
         type_comment_args=inferred_wrapped_function.type_comment_args,
+        doc_node=inferred_wrapped_function.doc_node,
     )
     return iter((partial_function,))
 
 
-def _looks_like_lru_cache(node):
+def _looks_like_lru_cache(node) -> bool:
     """Check if the given function node is decorated with lru_cache."""
     if not node.decorators:
         return False
@@ -130,7 +137,7 @@ def _looks_like_lru_cache(node):
 
 
 def _looks_like_functools_member(node, member) -> bool:
-    """Check if the given Call node is a functools.partial call"""
+    """Check if the given Call node is a functools.partial call."""
     if isinstance(node.func, Name):
         return node.func.name == member
     if isinstance(node.func, Attribute):
