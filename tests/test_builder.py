@@ -1,6 +1,6 @@
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
-# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+# For details: https://github.com/pylint-dev/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/pylint-dev/astroid/blob/main/CONTRIBUTORS.txt
 
 """Tests for the astroid builder and rebuilder module."""
 
@@ -19,7 +19,7 @@ import unittest.mock
 import pytest
 
 from astroid import Instance, builder, nodes, test_utils, util
-from astroid.const import IS_PYPY, PY38, PY38_PLUS, PY39_PLUS, PYPY_7_3_11_PLUS
+from astroid.const import IS_PYPY, PY38, PY39_PLUS, PYPY_7_3_11_PLUS
 from astroid.exceptions import (
     AstroidBuildingError,
     AstroidSyntaxError,
@@ -62,10 +62,7 @@ class FromToLineNoTest(unittest.TestCase):
             else:
                 self.assertEqual(strarg.tolineno, 5)
         else:
-            if not PY38_PLUS:
-                self.assertEqual(strarg.fromlineno, 5)
-            else:
-                self.assertEqual(strarg.fromlineno, 4)
+            self.assertEqual(strarg.fromlineno, 4)
             self.assertEqual(strarg.tolineno, 5)
         namearg = callfunc.args[1]
         self.assertIsInstance(namearg, nodes.Name)
@@ -160,8 +157,8 @@ class FromToLineNoTest(unittest.TestCase):
 
         c = ast_module.body[2]
         assert isinstance(c, nodes.ClassDef)
-        if not PY38_PLUS or IS_PYPY and PY38 and not PYPY_7_3_11_PLUS:
-            # Not perfect, but best we can do for Python 3.7 and PyPy 3.8 (< v7.3.11).
+        if IS_PYPY and PY38 and not PYPY_7_3_11_PLUS:
+            # Not perfect, but best we can do for PyPy 3.8 (< v7.3.11).
             # Can't detect closing bracket on new line.
             assert c.fromlineno == 12
         else:
@@ -418,6 +415,18 @@ class BuilderTest(unittest.TestCase):
     def test_data_build_invalid_x_escape(self) -> None:
         with self.assertRaises(AstroidSyntaxError):
             self.builder.string_build('"\\x1"')
+
+    def test_data_build_error_filename(self) -> None:
+        """Check that error filename is set to modname if given."""
+        with pytest.raises(AstroidSyntaxError, match="invalid escape sequence") as ctx:
+            self.builder.string_build("'\\d+\\.\\d+'")
+        assert isinstance(ctx.value.error, SyntaxError)
+        assert ctx.value.error.filename == "<unknown>"
+
+        with pytest.raises(AstroidSyntaxError, match="invalid escape sequence") as ctx:
+            self.builder.string_build("'\\d+\\.\\d+'", modname="mymodule")
+        assert isinstance(ctx.value.error, SyntaxError)
+        assert ctx.value.error.filename == "mymodule"
 
     def test_missing_newline(self) -> None:
         """Check that a file with no trailing new line is parseable."""
@@ -754,25 +763,23 @@ class FileBuildTest(unittest.TestCase):
         """Test base properties and method of an astroid module."""
         module = self.module
         self.assertEqual(module.name, "data.module")
-        with pytest.warns(DeprecationWarning) as records:
-            self.assertEqual(module.doc, "test module for astroid\n")
-            assert len(records) == 1
         assert isinstance(module.doc_node, nodes.Const)
         self.assertEqual(module.doc_node.value, "test module for astroid\n")
         self.assertEqual(module.fromlineno, 0)
         self.assertIsNone(module.parent)
         self.assertEqual(module.frame(), module)
-        self.assertEqual(module.frame(future=True), module)
+        self.assertEqual(module.frame(), module)
         self.assertEqual(module.root(), module)
         self.assertEqual(module.file, os.path.abspath(resources.find("data/module.py")))
         self.assertEqual(module.pure_python, 1)
         self.assertEqual(module.package, 0)
         self.assertFalse(module.is_statement)
-        with pytest.warns(DeprecationWarning) as records:
-            self.assertEqual(module.statement(), module)
-            assert len(records) == 1
         with self.assertRaises(StatementMissing):
-            module.statement(future=True)
+            with pytest.warns(DeprecationWarning) as records:
+                self.assertEqual(module.statement(future=True), module)
+                assert len(records) == 1
+        with self.assertRaises(StatementMissing):
+            module.statement()
 
     def test_module_locals(self) -> None:
         """Test the 'locals' dictionary of an astroid module."""
@@ -800,17 +807,14 @@ class FileBuildTest(unittest.TestCase):
         module = self.module
         function = module["global_access"]
         self.assertEqual(function.name, "global_access")
-        with pytest.warns(DeprecationWarning) as records:
-            self.assertEqual(function.doc, "function test")
-            assert len(records)
         assert isinstance(function.doc_node, nodes.Const)
         self.assertEqual(function.doc_node.value, "function test")
         self.assertEqual(function.fromlineno, 11)
         self.assertTrue(function.parent)
         self.assertEqual(function.frame(), function)
         self.assertEqual(function.parent.frame(), module)
-        self.assertEqual(function.frame(future=True), function)
-        self.assertEqual(function.parent.frame(future=True), module)
+        self.assertEqual(function.frame(), function)
+        self.assertEqual(function.parent.frame(), module)
         self.assertEqual(function.root(), module)
         self.assertEqual([n.name for n in function.args.args], ["key", "val"])
         self.assertEqual(function.type, "function")
@@ -827,17 +831,14 @@ class FileBuildTest(unittest.TestCase):
         module = self.module
         klass = module["YO"]
         self.assertEqual(klass.name, "YO")
-        with pytest.warns(DeprecationWarning) as records:
-            self.assertEqual(klass.doc, "hehe\n    haha")
-            assert len(records) == 1
         assert isinstance(klass.doc_node, nodes.Const)
         self.assertEqual(klass.doc_node.value, "hehe\n    haha")
         self.assertEqual(klass.fromlineno, 25)
         self.assertTrue(klass.parent)
         self.assertEqual(klass.frame(), klass)
         self.assertEqual(klass.parent.frame(), module)
-        self.assertEqual(klass.frame(future=True), klass)
-        self.assertEqual(klass.parent.frame(future=True), module)
+        self.assertEqual(klass.frame(), klass)
+        self.assertEqual(klass.parent.frame(), module)
         self.assertEqual(klass.root(), module)
         self.assertEqual(klass.basenames, [])
         self.assertTrue(klass.newstyle)
@@ -885,9 +886,6 @@ class FileBuildTest(unittest.TestCase):
         method = klass2["method"]
         self.assertEqual(method.name, "method")
         self.assertEqual([n.name for n in method.args.args], ["self"])
-        with pytest.warns(DeprecationWarning) as records:
-            self.assertEqual(method.doc, "method\n        test")
-            assert len(records) == 1
         assert isinstance(method.doc_node, nodes.Const)
         self.assertEqual(method.doc_node.value, "method\n        test")
         self.assertEqual(method.fromlineno, 48)
@@ -923,8 +921,7 @@ def test_module_build_dunder_file() -> None:
     assert module.path[0] == collections.__file__
 
 
-@pytest.mark.skipif(
-    PY38_PLUS,
+@pytest.mark.xfail(
     reason=(
         "The builtin ast module does not fail with a specific error "
         "for syntax error caused by invalid type comments."
@@ -963,7 +960,7 @@ def test_arguments_of_signature() -> None:
 
 
 class HermeticInterpreterTest(unittest.TestCase):
-    """Modeled on https://github.com/PyCQA/astroid/pull/1207#issuecomment-951455588."""
+    """Modeled on https://github.com/pylint-dev/astroid/pull/1207#issuecomment-951455588."""
 
     @classmethod
     def setUpClass(cls):

@@ -30,6 +30,10 @@
     "mails": ["androwiiid@gmail.com"],
     "name": "Paligot Gérard"
   },
+  "antonio@zoftko.com": {
+    "mails": ["antonio@zoftko.com", "antonioglez-23@hotmail.com"],
+    "name": "Antonio"
+  },
   "areveny@protonmail.com": {
     "mails": ["areveny@protonmail.com", "self@areveny.com"],
     "name": "Areveny",
@@ -164,6 +168,13 @@
     "mails": ["thenault@gmail.com", "sylvain.thenault@logilab.fr"],
     "name": "Sylvain Thénault",
     "team": "Ex-maintainers"
+  },
+  "tushar.sadhwani000@gmail.com": {
+    "mails": [
+      "tushar.sadhwani000@gmail.com",
+      "86737547+tushar-deepsource@users.noreply.github.com"
+    ],
+    "name": "Tushar Sadhwani"
   },
   "ville.skytta@iki.fi": {
     "mails": ["ville.skytta@iki.fi", "ville.skytta@upcloud.com"],

@@ -1,6 +1,6 @@
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
-# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+# For details: https://github.com/pylint-dev/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/pylint-dev/astroid/blob/main/CONTRIBUTORS.txt
 
 import sys
 import textwrap
@@ -11,7 +11,6 @@ import pytest
 
 from astroid import MANAGER, Instance, bases, manager, nodes, parse, test_utils
 from astroid.builder import AstroidBuilder, _extract_single_node, extract_node
-from astroid.const import PY38_PLUS
 from astroid.context import InferenceContext
 from astroid.exceptions import InferenceError
 from astroid.raw_building import build_module
@@ -27,10 +26,11 @@ else:
     HAS_NUMPY = True
 
 
-class NonRegressionTests(resources.AstroidCacheSetupMixin, unittest.TestCase):
+class NonRegressionTests(unittest.TestCase):
     def setUp(self) -> None:
         sys.path.insert(0, resources.find("data"))
         MANAGER.always_load_extensions = True
+        self.addCleanup(MANAGER.clear_cache)
 
     def tearDown(self) -> None:
         MANAGER.always_load_extensions = False
@@ -144,7 +144,7 @@ def run():
         classes = astroid.nodes_of_class(nodes.ClassDef)
         for klass in classes:
             # triggers the _is_metaclass call
-            klass.type  # pylint: disable=pointless-statement
+            klass.type  # pylint: disable=pointless-statement  # noqa: B018
 
     def test_decorator_callchain_issue42(self) -> None:
         builder = AstroidBuilder()
@@ -181,7 +181,6 @@ def test():
         base = next(result._proxied.bases[0].infer())
         self.assertEqual(base.name, "int")
 
-    @pytest.mark.skipif(not PY38_PLUS, reason="needs assignment expressions")
     def test_filter_stmts_nested_if(self) -> None:
         builder = AstroidBuilder()
         data = """
@@ -356,6 +355,27 @@ def test(val):
         assert isinstance(inferred, Instance)
         assert inferred.qname() == ".A"
 
+    def test_inference_context_consideration(self) -> None:
+        """https://github.com/PyCQA/astroid/issues/1828"""
+        code = """
+        class Base:
+            def return_type(self):
+                return type(self)()
+        class A(Base):
+            def method(self):
+                return self.return_type()
+        class B(Base):
+            def method(self):
+                return self.return_type()
+        A().method() #@
+        B().method() #@
+        """
+        node1, node2 = extract_node(code)
+        inferred1 = next(node1.infer())
+        assert inferred1.qname() == ".A"
+        inferred2 = next(node2.infer())
+        assert inferred2.qname() == ".B"
+
 
 class Whatever:
     a = property(lambda x: x, lambda x: x)  # type: ignore[misc]
@@ -393,7 +413,7 @@ def test_crash_in_dunder_inference_prevented() -> None:
 
 def test_regression_crash_classmethod() -> None:
     """Regression test for a crash reported in
-    https://github.com/PyCQA/pylint/issues/4982.
+    https://github.com/pylint-dev/pylint/issues/4982.
     """
     code = """
     class Base:
@@ -415,7 +435,7 @@ def test_regression_crash_classmethod() -> None:
 
 def test_max_inferred_for_complicated_class_hierarchy() -> None:
     """Regression test for a crash reported in
-    https://github.com/PyCQA/pylint/issues/5679.
+    https://github.com/pylint-dev/pylint/issues/5679.
 
     The class hierarchy of 'sqlalchemy' is so intricate that it becomes uninferable with
     the standard max_inferred of 100. We used to crash when this happened.

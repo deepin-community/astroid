@@ -1,3 +1,40 @@
+astroid (3.2.2-1) unstable; urgency=medium
+
+  [ Alexandre Detiste ]
+  * use new dh-sequence-python3
+
+  [ Daniel Echeverri ]
+  * New upstream version 3.2.2
+  * bump Standards-Version to 4.7.0 (no changes needed)
+
+ -- Daniel Echeverri <epsilon@debian.org>  Sun, 02 Jun 2024 20:07:14 -0500
+
+astroid (3.1.0-1) unstable; urgency=medium
+
+  [ Alexandre Detiste ]
+  * New upstream version 3.1.0
+  * six is needed for tests, not at runtime
+
+  [ Daniel Echeverri ]
+  * Fix clean and copyright years, set Rules-Requires-Root
+    + thanks to Nicolas Boulenguez for the changes!
+  * Set myself as maintainer. (Closes: #1065237)
+
+ -- Daniel Echeverri <epsilon@debian.org>  Sat, 06 Apr 2024 19:44:21 -0500
+
+astroid (3.0.2-2) unstable; urgency=medium
+
+  * orphan
+
+ -- Sandro Tosi <morph@debian.org>  Sat, 02 Mar 2024 01:48:16 -0500
+
+astroid (3.0.2-1) unstable; urgency=medium
+
+  * New upstream release; Closes: #1058371, #1058103
+  * update github organization from PyCQA to pylint-dev
+
+ -- Sandro Tosi <morph@debian.org>  Mon, 15 Jan 2024 03:28:30 -0500
+
 astroid (2.15.6-1) unstable; urgency=medium
 
   * New upstream release; Closes: #1041883

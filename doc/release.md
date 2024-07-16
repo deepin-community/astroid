@@ -12,7 +12,7 @@ the maintenance branch. If so, release a last patch release first. See
   example: `v2.3.5`)
 - Check the result of `git diff vX.Y-1.Z' ChangeLog`. (For example:
   `git diff v2.3.4 ChangeLog`)
-- Install the release dependencies: `pip3 install -r requirements_test.txt`
+- Install the release dependencies: `pip3 install -r requirements_minimal.txt`
 - Bump the version and release by using `tbump X.Y.0 --no-push --no-tag`. (For example:
   `tbump 2.4.0 --no-push --no-tag`)
 - Check the commit created with `git show` amend the commit if required.
@@ -41,6 +41,8 @@ Check the commit and then push to a release branch
   appropriate changelog in the description. This triggers the PyPI release.
 - Delete the `maintenance/X.Y-1.x` branch. (For example: `maintenance/2.3.x`)
 - Create a `maintenance/X.Y.x` (For example: `maintenance/2.4.x` from the `v2.4.0` tag.)
+  based on the tag from the release. The maintenance branch are protected you won't be
+  able to fix it after the fact if you create it from main.
 
 ## Backporting a fix from `main` to the maintenance branch
 
@@ -63,23 +65,40 @@ branch:
 ## Releasing a patch version
 
 We release patch versions when a crash or a bug is fixed on the main branch and has been
-cherry-picked on the maintenance branch.
+cherry-picked on the maintenance branch. Below, we will be releasing X.Y-1.Z (where X.Y
+is the version under development on `main`.)
 
+- Branch `release/X.Y-1.Z` off of `maintenance/X.Y.x`
 - Check the result of `git diff vX.Y-1.Z-1 ChangeLog`. (For example:
   `git diff v2.3.4 ChangeLog`)
-- Install the release dependencies: `pip3 install -r requirements_test.txt`
-- Bump the version and release by using `tbump X.Y-1.Z --no-push`. (For example:
-  `tbump 2.3.5 --no-push`)
+- Install the release dependencies: `pip3 install -r requirements_minimal.txt`
+- Bump the version and release by using `tbump X.Y-1.Z --no-tag --no-push`. (For
+  example: `tbump 2.3.5 --no-tag --no-push`. We're not ready to tag before code review.)
 - Check the result visually with `git show`.
-- Open a merge request to run the CI tests for this branch
-- Create and push the tag.
+- Open a merge request against `maintenance/X.Y-1.x` to run the CI tests for this
+  branch.
+- Consider copying the changelog into the body of the PR to examine the rendered
+  markdown.
+- Wait for an approval. Avoid using a merge commit. Avoid deleting the maintenance
+  branch.
+- Checkout `maintenance/X.Y.x` and fast-forward to the new commit.
+- Create and push the tag: `git tag vX.Y-1.Z` && `git push --tags`
 - Release the version on GitHub with the same name as the tag and copy and paste the
   appropriate changelog in the description. This triggers the PyPI release.
-- Merge the `maintenance/X.Y.x` branch on the main branch. The main branch should have
-  the changelog for `X.Y-1.Z+1` (For example `v2.3.6`). This merge is required so
-  `pre-commit autoupdate` works for pylint.
-- Fix version conflicts properly, or bump the version to `X.Y.0-devZ` (For example:
-  `2.4.0-dev6`) before pushing on the main branch
+- Freeze the main branch.
+- Branch `post-X.Y-1.Z` from `main`.
+- `git merge maintenance/X.Y-1.x`: this should have the changelog for `X.Y-1.Z+1` (For
+  example `v2.3.6`). This merge is required so `pre-commit autoupdate` works for pylint.
+- Fix version conflicts properly, meaning preserve the version numbers of the form
+  `X.Y.0-devZ` (For example: `2.4.0-dev6`).
+- Open a merge request against main. Ensure a merge commit is used, because pre-commit
+  need the patch release tag to be in the main branch history to consider the patch
+  release as the latest version and this won't be the case with rebase or squash. You
+  can defend against trigger-happy future selves by enabling auto-merge with the merge
+  commit strategy.
+- Wait for approval. Again, use a merge commit.
+- Unblock the main branch.
+- Close the milestone and open a new patch-release milestone.
 
 ## Milestone handling
 

@@ -1,13 +1,14 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: astroid
-Source: https://github.com/PyCQA/astroid
+Source: https://github.com/pylint-dev/astroid
 
 Files: *
-Copyright: 2003-2015 Logilab <pylint-dev@lists.logilab.org>
+Copyright: 2003-2023 Logilab <pylint-dev@lists.logilab.org>
 License: LGPL-2.1+
 
 Files: debian/*
 Copyright: 2014-2023 Sandro Tosi <morph@debian.org>
+		2024 Daniel Echeverri <epsilon@debian.org>
 License: LGPL-2.1+
 
 License: LGPL-2.1+

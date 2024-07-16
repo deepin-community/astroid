@@ -1,6 +1,6 @@
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
-# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+# For details: https://github.com/pylint-dev/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/pylint-dev/astroid/blob/main/CONTRIBUTORS.txt
 
 """Unit tests for module modutils (module manipulation utilities)."""
 import email
@@ -26,7 +26,7 @@ from astroid.interpreter._import import spec
 from . import resources
 
 try:
-    import urllib3  # pylint: disable=unused-import
+    import urllib3  # type: ignore[import]
 
     HAS_URLLIB3_V1 = urllib3.__version__.startswith("1")
 except ImportError:
@@ -41,6 +41,7 @@ class ModuleFileTest(unittest.TestCase):
     package = "mypypa"
 
     def tearDown(self) -> None:
+        astroid.MANAGER.clear_cache()
         for k in list(sys.path_importer_cache):
             if "MyPyPa" in k:
                 del sys.path_importer_cache[k]
@@ -221,7 +222,7 @@ class ModPathFromFileTest(unittest.TestCase):
         """Test that we correctly find packages with an __init__.py file.
 
         Regression test for issue reported in:
-        https://github.com/PyCQA/astroid/issues/1327
+        https://github.com/pylint-dev/astroid/issues/1327
         """
         tmp_dir = Path(tempfile.gettempdir())
         self.addCleanup(os.chdir, os.getcwd())
@@ -289,6 +290,19 @@ class GetSourceFileTest(unittest.TestCase):
 
     def test_raise(self) -> None:
         self.assertRaises(modutils.NoSourceFile, modutils.get_source_file, "whatever")
+
+    def test_pyi(self) -> None:
+        package = resources.find("pyi_data")
+        module = os.path.join(package, "__init__.pyi")
+        self.assertEqual(modutils.get_source_file(module), os.path.normpath(module))
+
+    def test_pyi_preferred(self) -> None:
+        package = resources.find("pyi_data/find_test")
+        module = os.path.join(package, "__init__.py")
+        self.assertEqual(
+            modutils.get_source_file(module, prefer_stubs=True),
+            os.path.normpath(module) + "i",
+        )
 
 
 class IsStandardModuleTest(resources.SysPathSetup, unittest.TestCase):
@@ -420,8 +434,12 @@ class ModuleInPathTest(resources.SysPathSetup, unittest.TestCase):
         assert modutils.module_in_path("data.module", datadir)
         assert modutils.module_in_path("data.module", (datadir,))
         assert modutils.module_in_path("data.module", os.path.abspath(datadir))
+        assert modutils.module_in_path("pyi_data.module", datadir)
+        assert modutils.module_in_path("pyi_data.module", (datadir,))
+        assert modutils.module_in_path("pyi_data.module", os.path.abspath(datadir))
         # "" will evaluate to cwd
         assert modutils.module_in_path("data.module", "")
+        assert modutils.module_in_path("pyi_data.module", "")
 
     def test_bad_import(self) -> None:
         datadir = resources.find("")
@@ -492,6 +510,19 @@ class GetModuleFilesTest(unittest.TestCase):
         modules = set(modutils.get_module_files(package, []))
         expected = [
             "__init__.py",
+            "module.py",
+            "module2.py",
+            "noendingnewline.py",
+            "nonregr.py",
+        ]
+        self.assertEqual(modules, {os.path.join(package, x) for x in expected})
+
+    def test_get_module_files_2(self) -> None:
+        package = resources.find("pyi_data/find_test")
+        modules = set(modutils.get_module_files(package, []))
+        expected = [
+            "__init__.py",
+            "__init__.pyi",
             "module.py",
             "module2.py",
             "noendingnewline.py",

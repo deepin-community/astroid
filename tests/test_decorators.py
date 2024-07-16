@@ -1,22 +1,19 @@
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
-# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+# For details: https://github.com/pylint-dev/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/pylint-dev/astroid/blob/main/CONTRIBUTORS.txt
 
 import pytest
 from _pytest.recwarn import WarningsRecorder
 
-from astroid.const import PY38_PLUS
-from astroid.decorators import cachedproperty, deprecate_default_argument_values
+from astroid.decorators import deprecate_default_argument_values
 
 
 class SomeClass:
     @deprecate_default_argument_values(name="str")
-    def __init__(self, name=None, lineno=None):
-        ...
+    def __init__(self, name=None, lineno=None): ...
 
     @deprecate_default_argument_values("3.2", name="str", var="int")
-    def func(self, name=None, var=None, type_annotation=None):
-        ...
+    def func(self, name=None, var=None, type_annotation=None): ...
 
 
 class TestDeprecationDecorators:
@@ -102,18 +99,3 @@ class TestDeprecationDecorators:
         instance = SomeClass(name="some_name")
         instance.func(name="", var=42)
         assert len(recwarn) == 0
-
-
-@pytest.mark.skipif(not PY38_PLUS, reason="Requires Python 3.8 or higher")
-def test_deprecation_warning_on_cachedproperty() -> None:
-    """Check the DeprecationWarning on cachedproperty."""
-
-    with pytest.warns(DeprecationWarning) as records:
-
-        class MyClass:  # pylint: disable=unused-variable
-            @cachedproperty
-            def my_property(self):
-                return 1
-
-        assert len(records) == 1
-        assert "functools.cached_property" in records[0].message.args[0]

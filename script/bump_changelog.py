@@ -1,6 +1,6 @@
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
-# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+# For details: https://github.com/pylint-dev/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/pylint-dev/astroid/blob/main/CONTRIBUTORS.txt
 
 """
 This script permits to upgrade the changelog in astroid or pylint when releasing a version.
@@ -34,7 +34,7 @@ def main() -> None:
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
     logging.debug(f"Launching bump_changelog with args: {args}")
-    if "dev" in args.version:
+    if any(s in args.version for s in ("dev", "a", "b")):
         return
     with open(DEFAULT_CHANGELOG_PATH, encoding="utf-8") as f:
         content = f.read()

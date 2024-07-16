@@ -1,6 +1,6 @@
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
-# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+# For details: https://github.com/pylint-dev/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/pylint-dev/astroid/blob/main/CONTRIBUTORS.txt
 
 import builtins
 import unittest
@@ -259,3 +259,18 @@ class TestHelpers(unittest.TestCase):
         builtin_type = self._extract("type")
         self.assertTrue(helpers.is_supertype(builtin_type, cls_a))
         self.assertTrue(helpers.is_subtype(cls_a, builtin_type))
+
+
+def test_uninferable_for_safe_infer() -> None:
+    uninfer = util.Uninferable
+    assert util.safe_infer(util.Uninferable) == uninfer
+
+
+def test_safe_infer_shim() -> None:
+    with pytest.warns(DeprecationWarning) as records:
+        helpers.safe_infer(nodes.Unknown())
+
+    assert (
+        "Import safe_infer from astroid.util; this shim in astroid.helpers will be removed."
+        in records[0].message.args[0]
+    )

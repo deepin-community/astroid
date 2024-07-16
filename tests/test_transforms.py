@@ -1,18 +1,24 @@
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
-# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+# For details: https://github.com/pylint-dev/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/pylint-dev/astroid/blob/main/CONTRIBUTORS.txt
 
 from __future__ import annotations
 
 import contextlib
+import sys
 import time
 import unittest
 from collections.abc import Callable, Iterator
 
+import pytest
+
 from astroid import MANAGER, builder, nodes, parse, transforms
+from astroid.brain.brain_dataclasses import _looks_like_dataclass_field_call
+from astroid.const import IS_PYPY
 from astroid.manager import AstroidManager
 from astroid.nodes.node_classes import Call, Compare, Const, Name
 from astroid.nodes.scoped_nodes import FunctionDef, Module
+from tests.testdata.python3.recursion_error import LONG_CHAINED_METHOD_CALL
 
 
 @contextlib.contextmanager
@@ -87,8 +93,21 @@ class TestTransforms(unittest.TestCase):
 
     def test_transform_patches_locals(self) -> None:
         def transform_function(node: FunctionDef) -> None:
-            assign = nodes.Assign()
-            name = nodes.AssignName(name="value")
+            assign = nodes.Assign(
+                parent=node,
+                lineno=node.lineno,
+                col_offset=node.col_offset,
+                end_lineno=node.end_lineno,
+                end_col_offset=node.end_col_offset,
+            )
+            name = nodes.AssignName(
+                name="value",
+                lineno=0,
+                col_offset=0,
+                parent=assign,
+                end_lineno=None,
+                end_col_offset=None,
+            )
             assign.targets = [name]
             assign.value = nodes.const_factory(42)
             node.body.append(assign)
@@ -151,7 +170,7 @@ class TestTransforms(unittest.TestCase):
                 for decorator in node.decorators.nodes:
                     inferred = next(decorator.infer())
                     if inferred.qname() == "abc.abstractmethod":
-                        return next(node.infer_call_result())
+                        return next(node.infer_call_result(None))
             return None
 
         manager = MANAGER
@@ -183,7 +202,14 @@ class TestTransforms(unittest.TestCase):
     def test_transforms_are_called_for_builtin_modules(self) -> None:
         # Test that transforms are called for builtin modules.
         def transform_function(node: FunctionDef) -> FunctionDef:
-            name = nodes.AssignName(name="value")
+            name = nodes.AssignName(
+                name="value",
+                lineno=0,
+                col_offset=0,
+                parent=node.args,
+                end_lineno=None,
+                end_col_offset=None,
+            )
             node.args.args = [name]
             return node
 
@@ -238,3 +264,21 @@ class TestTransforms(unittest.TestCase):
                 import UserDict
         """
         )
+
+    def test_transform_aborted_if_recursion_limited(self):
+        def transform_call(node: Call) -> Const:
+            return node
+
+        self.transformer.register_transform(
+            nodes.Call, transform_call, _looks_like_dataclass_field_call
+        )
+
+        original_limit = sys.getrecursionlimit()
+        sys.setrecursionlimit(500 if IS_PYPY else 1000)
+
+        try:
+            with pytest.warns(UserWarning) as records:
+                self.parse_transform(LONG_CHAINED_METHOD_CALL)
+                assert "sys.setrecursionlimit" in records[0].message.args[0]
+        finally:
+            sys.setrecursionlimit(original_limit)

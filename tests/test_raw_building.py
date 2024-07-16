@@ -5,8 +5,8 @@ to simulate issues in unittest below
 """
 
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
-# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+# For details: https://github.com/pylint-dev/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/pylint-dev/astroid/blob/main/CONTRIBUTORS.txt
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ import pytest
 import tests.testdata.python3.data.fake_module_with_broken_getattr as fm_getattr
 import tests.testdata.python3.data.fake_module_with_warnings as fm
 from astroid.builder import AstroidBuilder
-from astroid.const import IS_PYPY
+from astroid.const import IS_PYPY, PY312_PLUS
 from astroid.raw_building import (
     attach_dummy_node,
     build_class,
@@ -50,17 +50,11 @@ class RawBuildingTC(unittest.TestCase):
     def test_build_class(self) -> None:
         node = build_class("MyClass")
         self.assertEqual(node.name, "MyClass")
-        with pytest.warns(DeprecationWarning) as records:
-            self.assertEqual(node.doc, None)
-            assert len(records) == 1
         self.assertEqual(node.doc_node, None)
 
     def test_build_function(self) -> None:
         node = build_function("MyFunction")
         self.assertEqual(node.name, "MyFunction")
-        with pytest.warns(DeprecationWarning) as records:
-            self.assertEqual(node.doc, None)
-            assert len(records) == 1
         self.assertEqual(node.doc_node, None)
 
     def test_build_function_args(self) -> None:
@@ -92,7 +86,7 @@ class RawBuildingTC(unittest.TestCase):
 
     @unittest.skipIf(IS_PYPY, "Only affects CPython")
     def test_io_is__io(self):
-        # _io module calls itself io. This leads
+        # _io module calls itself io before Python 3.12. This leads
         # to cyclic dependencies when astroid tries to resolve
         # what io.BufferedReader is. The code that handles this
         # is in astroid.raw_building.imported_member, which verifies
@@ -100,10 +94,11 @@ class RawBuildingTC(unittest.TestCase):
         builder = AstroidBuilder()
         module = builder.inspect_build(_io)
         buffered_reader = module.getattr("BufferedReader")[0]
-        self.assertEqual(buffered_reader.root().name, "io")
+        expected = "_io" if PY312_PLUS else "io"
+        self.assertEqual(buffered_reader.root().name, expected)
 
     def test_build_function_deepinspect_deprecation(self) -> None:
-        # Tests https://github.com/PyCQA/astroid/issues/1717
+        # Tests https://github.com/pylint-dev/astroid/issues/1717
         # When astroid deep inspection of modules raises
         # attribute errors when getting all attributes
         # Create a mock module to simulate a Cython module
@@ -116,7 +111,7 @@ class RawBuildingTC(unittest.TestCase):
         AstroidBuilder().module_build(m, "test")
 
     def test_module_object_with_broken_getattr(self) -> None:
-        # Tests https://github.com/PyCQA/astroid/issues/1958
+        # Tests https://github.com/pylint-dev/astroid/issues/1958
         # When astroid deep inspection of modules raises
         # errors when using hasattr().
 

@@ -1,6 +1,6 @@
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
-# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+# For details: https://github.com/pylint-dev/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/pylint-dev/astroid/blob/main/CONTRIBUTORS.txt
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import astroid
 from astroid import nodes
 
 try:
-    import attr as attr_module  # pylint: disable=unused-import
+    import attr  # type: ignore[import]  # pylint: disable=unused-import
 
     HAS_ATTR = True
 except ImportError:
@@ -74,17 +74,23 @@ class AttrsTest(unittest.TestCase):
 
         l = Eggs(d=1)
         l.d['answer'] = 42
+
+        @attr.attrs(auto_attribs=True)
+        class Eggs:
+            d: int = attr.Factory(lambda: 3)
+
+        m = Eggs(d=1)
         """
         )
 
-        for name in ("f", "g", "h", "i", "j", "k", "l"):
+        for name in ("f", "g", "h", "i", "j", "k", "l", "m"):
             should_be_unknown = next(module.getattr(name)[0].infer()).getattr("d")[0]
             self.assertIsInstance(should_be_unknown, astroid.Unknown)
 
     def test_attrs_transform(self) -> None:
         """Test brain for decorators of the 'attrs' package.
 
-        Package added support for 'attrs' a long side 'attr' in v21.3.0.
+        Package added support for 'attrs' alongside 'attr' in v21.3.0.
         See: https://github.com/python-attrs/attrs/releases/tag/21.3.0
         """
         module = astroid.parse(
@@ -147,36 +153,12 @@ class AttrsTest(unittest.TestCase):
         @frozen
         class Legs:
             d = attrs.field(default=attrs.Factory(dict))
-
-        m = Legs(d=1)
-        m.d['answer'] = 42
-
-        @define
-        class FooBar:
-            d = attrs.field(default=attrs.Factory(dict))
-
-        n = FooBar(d=1)
-        n.d['answer'] = 42
-
-        @mutable
-        class BarFoo:
-            d = attrs.field(default=attrs.Factory(dict))
-
-        o = BarFoo(d=1)
-        o.d['answer'] = 42
-
-        @my_mutable
-        class FooFoo:
-            d = attrs.field(default=attrs.Factory(dict))
-
-        p = FooFoo(d=1)
-        p.d['answer'] = 42
         """
         )
 
-        for name in ("f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p"):
+        for name in ("f", "g", "h", "i", "j", "k", "l"):
             should_be_unknown = next(module.getattr(name)[0].infer()).getattr("d")[0]
-            self.assertIsInstance(should_be_unknown, astroid.Unknown)
+            self.assertIsInstance(should_be_unknown, astroid.Unknown, name)
 
     def test_special_attributes(self) -> None:
         """Make sure special attrs attributes exist"""
@@ -191,7 +173,7 @@ class AttrsTest(unittest.TestCase):
         """
         foo_inst = next(astroid.extract_node(code).infer())
         [attr_node] = foo_inst.getattr("__attrs_attrs__")
-        # Prevents https://github.com/PyCQA/pylint/issues/1884
+        # Prevents https://github.com/pylint-dev/pylint/issues/1884
         assert isinstance(attr_node, nodes.Unknown)
 
     def test_dont_consider_assignments_but_without_attrs(self) -> None:
