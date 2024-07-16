@@ -1,8 +1,11 @@
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
-# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+# For details: https://github.com/pylint-dev/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/pylint-dev/astroid/blob/main/CONTRIBUTORS.txt
+
+from __future__ import annotations
 
 import unittest
+from typing import ClassVar
 
 try:
     import numpy  # pylint: disable=unused-import
@@ -23,7 +26,7 @@ from astroid.brain.brain_numpy_utils import (
 class NumpyBrainCoreNumericTypesTest(unittest.TestCase):
     """Test of all the missing types defined in numerictypes module."""
 
-    all_types = [
+    all_types: ClassVar[list[str]] = [
         "uint16",
         "uint32",
         "uint64",
@@ -306,7 +309,7 @@ class NumpyBrainCoreNumericTypesTest(unittest.TestCase):
         Test that the return of astype method of the datetime object
         is inferred as a ndarray.
 
-        PyCQA/pylint#3332
+        pylint-dev/pylint#3332
         """
         node = builder.extract_node(
             """

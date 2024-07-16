@@ -1,6 +1,6 @@
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
-# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+# For details: https://github.com/pylint-dev/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/pylint-dev/astroid/blob/main/CONTRIBUTORS.txt
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import pytest
 from astroid import builder, nodes
 
 try:
-    import typing_extensions  # pylint: disable=unused-import
+    import typing_extensions
 
     HAS_TYPING_EXTENSIONS = True
     HAS_TYPING_EXTENSIONS_TYPEVAR = hasattr(typing_extensions, "TypeVar")

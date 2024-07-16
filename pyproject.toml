@@ -17,35 +17,34 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Software Development :: Quality Assurance",
     "Topic :: Software Development :: Testing",
 ]
-requires-python = ">=3.7.2"
+requires-python = ">=3.8.0"
 dependencies = [
-    "lazy_object_proxy>=1.4.0",
-    "wrapt>=1.14,<2;python_version>='3.11'",
-    "wrapt>=1.11,<2;python_version<'3.11'",
-    "typed-ast>=1.4.0,<2.0;implementation_name=='cpython' and python_version<'3.8'",
     "typing-extensions>=4.0.0;python_version<'3.11'",
 ]
 dynamic = ["version"]
 
 [project.urls]
 "Docs"           = "https://pylint.readthedocs.io/projects/astroid/en/latest/"
-"Source Code"    = "https://github.com/PyCQA/astroid"
-"Bug tracker"    = "https://github.com/PyCQA/astroid/issues"
+"Source Code"    = "https://github.com/pylint-dev/astroid"
+"Bug tracker"    = "https://github.com/pylint-dev/astroid/issues"
 "Discord server" = "https://discord.gg/Egy6P8AMB5"
 
 [tool.setuptools]
 license-files = ["LICENSE", "CONTRIBUTORS.txt"]  # Keep in sync with setup.cfg
+
+[tool.setuptools.package-dir]
+"" = "."
 
 [tool.setuptools.packages.find]
 include = ["astroid*"]
@@ -62,14 +61,6 @@ python_files = ["*test_*.py"]
 testpaths = ["tests"]
 filterwarnings = "error"
 
-[tool.isort]
-include_trailing_comma = true
-known_first_party = ["astroid"]
-known_third_party = ["attr", "nose", "numpy", "pytest", "six", "sphinx"]
-line_length = 88
-multi_line_output = 3
-skip_glob = ["tests/testdata"]
-
 [tool.mypy]
 enable_error_code = "ignore-without-code"
 no_implicit_optional = true
@@ -83,11 +74,46 @@ module = [
     "_io.*",
     "gi.*",
     "importlib.*",
-    "lazy_object_proxy.*",
     "nose.*",
     "numpy.*",
     "pytest",
     "setuptools",
-    "wrapt.*",
 ]
 ignore_missing_imports = true
+
+
+[tool.ruff]
+
+# ruff is less lenient than pylint and does not make any exceptions
+# (for docstrings, strings and comments in particular).
+line-length = 110
+
+select = [
+    "E",  # pycodestyle
+    "F",  # pyflakes
+    "W",  # pycodestyle
+    "B",  # bugbear
+    "I",  # isort
+    "RUF", # ruff
+]
+
+ignore = [
+    "B905", # `zip()` without an explicit `strict=` parameter
+    "F401",  # API
+    "RUF100", # ruff does not understand pylint's directive usefulness
+]
+
+fixable = [
+    "E",  # pycodestyle
+    "F",  # pyflakes
+    "W",  # pycodestyle
+    "B",  # bugbear
+    "I",  # isort
+    "RUF", # ruff
+]
+unfixable = ["RUF001"]
+target-version = "py38"
+
+[tool.ruff.per-file-ignores]
+# Ruff is autofixing a tests with a voluntarily sneaky unicode
+"tests/test_regrtest.py" = ["RUF001"]

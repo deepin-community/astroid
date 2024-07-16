@@ -1,6 +1,6 @@
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
-# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+# For details: https://github.com/pylint-dev/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/pylint-dev/astroid/blob/main/CONTRIBUTORS.txt
 
 import unittest
 import xml
@@ -13,7 +13,7 @@ from astroid.const import PY311_PLUS
 from astroid.exceptions import InferenceError
 
 try:
-    import six  # pylint: disable=unused-import
+    import six  # type: ignore[import]  # pylint: disable=unused-import
 
     HAS_SIX = True
 except ImportError:
@@ -307,7 +307,17 @@ class ModuleModelTest(unittest.TestCase):
 
         init_ = next(ast_nodes[9].infer())
         assert isinstance(init_, bases.BoundMethod)
-        init_result = next(init_.infer_call_result(nodes.Call()))
+        init_result = next(
+            init_.infer_call_result(
+                nodes.Call(
+                    parent=None,
+                    lineno=None,
+                    col_offset=None,
+                    end_lineno=None,
+                    end_col_offset=None,
+                )
+            )
+        )
         assert isinstance(init_result, nodes.Const)
         assert init_result.value is None
 
@@ -485,7 +495,17 @@ class FunctionModelTest(unittest.TestCase):
 
         init_ = next(ast_nodes[9].infer())
         assert isinstance(init_, bases.BoundMethod)
-        init_result = next(init_.infer_call_result(nodes.Call()))
+        init_result = next(
+            init_.infer_call_result(
+                nodes.Call(
+                    parent=None,
+                    lineno=None,
+                    col_offset=None,
+                    end_lineno=None,
+                    end_col_offset=None,
+                )
+            )
+        )
         assert isinstance(init_result, nodes.Const)
         assert init_result.value is None
 
@@ -568,6 +588,10 @@ class FunctionModelTest(unittest.TestCase):
         self.assertEqual(annotations.getitem(astroid.Const("a")).value, 1)
         self.assertEqual(annotations.getitem(astroid.Const("b")).value, 2)
         self.assertEqual(annotations.getitem(astroid.Const("c")).value, 3)
+
+    def test_is_not_lambda(self):
+        ast_node = builder.extract_node("def func(): pass")
+        self.assertIs(ast_node.is_lambda, False)
 
 
 class TestContextManagerModel:
@@ -718,13 +742,14 @@ class ExceptionModelTest(unittest.TestCase):
     def test_unicodedecodeerror(self) -> None:
         code = """
         try:
-            raise UnicodeDecodeError("utf-8", "blob", 0, 1, "reason")
+            raise UnicodeDecodeError("utf-8", b"blob", 0, 1, "reason")
         except UnicodeDecodeError as error:
-            error.object[:1] #@
+            error.object #@
         """
         node = builder.extract_node(code)
         inferred = next(node.infer())
         assert isinstance(inferred, astroid.Const)
+        assert inferred.value == b""
 
     def test_import_error(self) -> None:
         ast_nodes = builder.extract_node(
@@ -809,13 +834,13 @@ class TestExceptionInstanceModel:
         assert not args.elts
 
 
-class LruCacheModelTest(unittest.TestCase):
-    def test_lru_cache(self) -> None:
-        ast_nodes = builder.extract_node(
-            """
+@pytest.mark.parametrize("parentheses", (True, False))
+def test_lru_cache(parentheses) -> None:
+    ast_nodes = builder.extract_node(
+        f"""
         import functools
         class Foo(object):
-            @functools.lru_cache()
+            @functools.lru_cache{"()" if parentheses else ""}
             def foo():
                 pass
         f = Foo()
@@ -823,12 +848,12 @@ class LruCacheModelTest(unittest.TestCase):
         f.foo.__wrapped__ #@
         f.foo.cache_info() #@
         """
-        )
-        assert isinstance(ast_nodes, list)
-        cache_clear = next(ast_nodes[0].infer())
-        self.assertIsInstance(cache_clear, astroid.BoundMethod)
-        wrapped = next(ast_nodes[1].infer())
-        self.assertIsInstance(wrapped, astroid.FunctionDef)
-        self.assertEqual(wrapped.name, "foo")
-        cache_info = next(ast_nodes[2].infer())
-        self.assertIsInstance(cache_info, astroid.Instance)
+    )
+    assert isinstance(ast_nodes, list)
+    cache_clear = next(ast_nodes[0].infer())
+    assert isinstance(cache_clear, astroid.BoundMethod)
+    wrapped = next(ast_nodes[1].infer())
+    assert isinstance(wrapped, astroid.FunctionDef)
+    assert wrapped.name == "foo"
+    cache_info = next(ast_nodes[2].infer())
+    assert isinstance(cache_info, astroid.Instance)

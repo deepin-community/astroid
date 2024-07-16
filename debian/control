@@ -1,9 +1,10 @@
 Source: astroid
 Section: python
 Priority: optional
-Maintainer: Sandro Tosi <morph@debian.org>
-Uploaders: Debian Python Team <team+python@tracker.debian.org>,
+Maintainer: Daniel Echeverri <epsilon@debian.org>
+Uploaders: Debian Python Team <team+python@tracker.debian.org>
 Build-Depends: debhelper-compat (= 13),
+               dh-sequence-python3,
                pybuild-plugin-pyproject,
                python3-all,
                python3-lazy-object-proxy (>= 1.4.0),
@@ -11,17 +12,18 @@ Build-Depends: debhelper-compat (= 13),
                python3-pytest <!nocheck>,
                python3-pytest-runner <!nocheck>,
                python3-setuptools,
+               python3-six,
                python3-typing-extensions (>= 3.10.0) <!nocheck>,
                python3-wrapt,
-Standards-Version: 4.6.2.0
-Homepage: https://github.com/PyCQA/astroid
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+Homepage: https://github.com/pylint-dev/astroid
 Vcs-Git: https://salsa.debian.org/python-team/packages/astroid.git
 Vcs-Browser: https://salsa.debian.org/python-team/packages/astroid
 
 Package: python3-astroid
 Architecture: all
 Depends: python3-setuptools,
-         python3-six,
          python3-typing-extensions,
          ${misc:Depends},
          ${python3:Depends},

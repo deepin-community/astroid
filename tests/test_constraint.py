@@ -1,6 +1,6 @@
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
-# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+# For details: https://github.com/pylint-dev/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/pylint-dev/astroid/blob/main/CONTRIBUTORS.txt
 
 """Tests for inference involving constraints."""
 from __future__ import annotations
@@ -333,10 +333,6 @@ def test_if_comprehension_shadow(
             ]
     """
     )
-    # Hack for Python 3.7 where the ListComp starts on L5 instead of L4
-    # Extract_node doesn't handle this correctly
-    if isinstance(node, nodes.ListComp):
-        node = node.elt
     inferred = node.inferred()
     assert len(inferred) == 2
 

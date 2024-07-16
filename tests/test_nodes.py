@@ -1,13 +1,15 @@
 # Licensed under the LGPL: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html
-# For details: https://github.com/PyCQA/astroid/blob/main/LICENSE
-# Copyright (c) https://github.com/PyCQA/astroid/blob/main/CONTRIBUTORS.txt
+# For details: https://github.com/pylint-dev/astroid/blob/main/LICENSE
+# Copyright (c) https://github.com/pylint-dev/astroid/blob/main/CONTRIBUTORS.txt
 
 """Tests for specific behaviour of astroid nodes."""
 
 from __future__ import annotations
 
 import copy
+import inspect
 import os
+import random
 import sys
 import textwrap
 import unittest
@@ -20,13 +22,14 @@ from astroid import (
     Uninferable,
     bases,
     builder,
+    extract_node,
     nodes,
     parse,
     test_utils,
     transforms,
     util,
 )
-from astroid.const import PY38_PLUS, PY310_PLUS, Context
+from astroid.const import IS_PYPY, PY310_PLUS, PY312_PLUS, Context
 from astroid.context import InferenceContext
 from astroid.exceptions import (
     AstroidBuildingError,
@@ -44,17 +47,11 @@ from astroid.nodes.node_classes import (
     Tuple,
 )
 from astroid.nodes.scoped_nodes import ClassDef, FunctionDef, GeneratorExp, Module
+from tests.testdata.python3.recursion_error import LONG_CHAINED_METHOD_CALL
 
 from . import resources
 
 abuilder = builder.AstroidBuilder()
-try:
-    import typed_ast  # pylint: disable=unused-import
-
-    HAS_TYPED_AST = True
-except ImportError:
-    # typed_ast merged in `ast` in Python 3.8
-    HAS_TYPED_AST = PY38_PLUS
 
 
 class AsStringTest(resources.SysPathSetup, unittest.TestCase):
@@ -283,6 +280,47 @@ everything = f""" " \' \r \t \\ {{ }} {'x' + x!r:a} {["'"]!s:{a}}"""
         assert nodes.Unknown().as_string() == "Unknown.Unknown()"
         assert nodes.Unknown(lineno=1, col_offset=0).as_string() == "Unknown.Unknown()"
 
+    @staticmethod
+    @pytest.mark.skipif(
+        IS_PYPY,
+        reason="Test requires manipulating the recursion limit, which cannot "
+        "be undone in a finally block without polluting other tests on PyPy.",
+    )
+    def test_recursion_error_trapped() -> None:
+        with pytest.warns(UserWarning, match="unable to transform"):
+            ast = abuilder.string_build(LONG_CHAINED_METHOD_CALL)
+
+        attribute = ast.body[1].value.func
+        with pytest.raises(UserWarning):
+            attribute.as_string()
+
+
+@pytest.mark.skipif(not PY312_PLUS, reason="Uses 3.12 type param nodes")
+class AsStringTypeParamNodes(unittest.TestCase):
+    @staticmethod
+    def test_as_string_type_alias() -> None:
+        ast = abuilder.string_build("type Point = tuple[float, float]")
+        type_alias = ast.body[0]
+        assert type_alias.as_string().strip() == "Point"
+
+    @staticmethod
+    def test_as_string_type_var() -> None:
+        ast = abuilder.string_build("type Point[T] = tuple[float, float]")
+        type_var = ast.body[0].type_params[0]
+        assert type_var.as_string().strip() == "T"
+
+    @staticmethod
+    def test_as_string_type_var_tuple() -> None:
+        ast = abuilder.string_build("type Alias[*Ts] = tuple[*Ts]")
+        type_var_tuple = ast.body[0].type_params[0]
+        assert type_var_tuple.as_string().strip() == "*Ts"
+
+    @staticmethod
+    def test_as_string_param_spec() -> None:
+        ast = abuilder.string_build("type Alias[**P] = Callable[P, int]")
+        param_spec = ast.body[0].type_params[0]
+        assert param_spec.as_string().strip() == "P"
+
 
 class _NodeTest(unittest.TestCase):
     """Test transformation of If Node."""
@@ -345,65 +383,34 @@ class IfNodeTest(_NodeTest):
         self.assertEqual(self.astroid.body[1].orelse[0].block_range(7), (7, 8))
         self.assertEqual(self.astroid.body[1].orelse[0].block_range(8), (8, 8))
 
-    @staticmethod
-    @pytest.mark.filterwarnings("ignore:.*is_sys_guard:DeprecationWarning")
-    def test_if_sys_guard() -> None:
-        code = builder.extract_node(
-            """
-        import sys
-        if sys.version_info > (3, 8):  #@
+
+class TryNodeTest(_NodeTest):
+    CODE = """
+        try:  # L2
+            print("Hello")
+        except IOError:
             pass
-
-        if sys.version_info[:2] > (3, 8):  #@
+        except UnicodeError:
             pass
+        else:
+            print()
+        finally:
+            print()
+    """
 
-        if sys.some_other_function > (3, 8):  #@
-            pass
-        """
-        )
-        assert isinstance(code, list) and len(code) == 3
-
-        assert isinstance(code[0], nodes.If)
-        assert code[0].is_sys_guard() is True
-        assert isinstance(code[1], nodes.If)
-        assert code[1].is_sys_guard() is True
-
-        assert isinstance(code[2], nodes.If)
-        assert code[2].is_sys_guard() is False
-
-    @staticmethod
-    @pytest.mark.filterwarnings("ignore:.*is_typing_guard:DeprecationWarning")
-    def test_if_typing_guard() -> None:
-        code = builder.extract_node(
-            """
-        import typing
-        import typing as t
-        from typing import TYPE_CHECKING
-
-        if typing.TYPE_CHECKING:  #@
-            pass
-
-        if t.TYPE_CHECKING:  #@
-            pass
-
-        if TYPE_CHECKING:  #@
-            pass
-
-        if typing.SOME_OTHER_CONST:  #@
-            pass
-        """
-        )
-        assert isinstance(code, list) and len(code) == 4
-
-        assert isinstance(code[0], nodes.If)
-        assert code[0].is_typing_guard() is True
-        assert isinstance(code[1], nodes.If)
-        assert code[1].is_typing_guard() is True
-        assert isinstance(code[2], nodes.If)
-        assert code[2].is_typing_guard() is True
-
-        assert isinstance(code[3], nodes.If)
-        assert code[3].is_typing_guard() is False
+    def test_block_range(self) -> None:
+        try_node = self.astroid.body[0]
+        assert try_node.block_range(1) == (1, 11)
+        assert try_node.block_range(2) == (2, 2)
+        assert try_node.block_range(3) == (3, 3)
+        assert try_node.block_range(4) == (4, 4)
+        assert try_node.block_range(5) == (5, 5)
+        assert try_node.block_range(6) == (6, 6)
+        assert try_node.block_range(7) == (7, 7)
+        assert try_node.block_range(8) == (8, 8)
+        assert try_node.block_range(9) == (9, 9)
+        assert try_node.block_range(10) == (10, 10)
+        assert try_node.block_range(11) == (11, 11)
 
 
 class TryExceptNodeTest(_NodeTest):
@@ -420,14 +427,15 @@ class TryExceptNodeTest(_NodeTest):
 
     def test_block_range(self) -> None:
         # XXX ensure expected values
-        self.assertEqual(self.astroid.body[0].block_range(1), (1, 8))
+        self.assertEqual(self.astroid.body[0].block_range(1), (1, 9))
         self.assertEqual(self.astroid.body[0].block_range(2), (2, 2))
-        self.assertEqual(self.astroid.body[0].block_range(3), (3, 8))
+        self.assertEqual(self.astroid.body[0].block_range(3), (3, 3))
         self.assertEqual(self.astroid.body[0].block_range(4), (4, 4))
         self.assertEqual(self.astroid.body[0].block_range(5), (5, 5))
         self.assertEqual(self.astroid.body[0].block_range(6), (6, 6))
         self.assertEqual(self.astroid.body[0].block_range(7), (7, 7))
         self.assertEqual(self.astroid.body[0].block_range(8), (8, 8))
+        self.assertEqual(self.astroid.body[0].block_range(9), (9, 9))
 
 
 class TryFinallyNodeTest(_NodeTest):
@@ -440,10 +448,11 @@ class TryFinallyNodeTest(_NodeTest):
 
     def test_block_range(self) -> None:
         # XXX ensure expected values
-        self.assertEqual(self.astroid.body[0].block_range(1), (1, 4))
+        self.assertEqual(self.astroid.body[0].block_range(1), (1, 5))
         self.assertEqual(self.astroid.body[0].block_range(2), (2, 2))
-        self.assertEqual(self.astroid.body[0].block_range(3), (3, 4))
+        self.assertEqual(self.astroid.body[0].block_range(3), (3, 3))
         self.assertEqual(self.astroid.body[0].block_range(4), (4, 4))
+        self.assertEqual(self.astroid.body[0].block_range(5), (5, 5))
 
 
 class TryExceptFinallyNodeTest(_NodeTest):
@@ -458,12 +467,13 @@ class TryExceptFinallyNodeTest(_NodeTest):
 
     def test_block_range(self) -> None:
         # XXX ensure expected values
-        self.assertEqual(self.astroid.body[0].block_range(1), (1, 6))
+        self.assertEqual(self.astroid.body[0].block_range(1), (1, 7))
         self.assertEqual(self.astroid.body[0].block_range(2), (2, 2))
-        self.assertEqual(self.astroid.body[0].block_range(3), (3, 4))
+        self.assertEqual(self.astroid.body[0].block_range(3), (3, 3))
         self.assertEqual(self.astroid.body[0].block_range(4), (4, 4))
         self.assertEqual(self.astroid.body[0].block_range(5), (5, 5))
         self.assertEqual(self.astroid.body[0].block_range(6), (6, 6))
+        self.assertEqual(self.astroid.body[0].block_range(7), (7, 7))
 
 
 class ImportNodeTest(resources.SysPathSetup, unittest.TestCase):
@@ -606,19 +616,19 @@ class ConstNodeTest(unittest.TestCase):
         self.assertIs(node.value, value)
         self.assertTrue(node._proxied.parent)
         self.assertEqual(node._proxied.root().name, value.__class__.__module__)
-        with self.assertRaises(AttributeError):
+        with self.assertRaises(StatementMissing):
             with pytest.warns(DeprecationWarning) as records:
-                node.statement()
+                node.statement(future=True)
                 assert len(records) == 1
         with self.assertRaises(StatementMissing):
-            node.statement(future=True)
+            node.statement()
 
-        with self.assertRaises(AttributeError):
+        with self.assertRaises(ParentMissingError):
             with pytest.warns(DeprecationWarning) as records:
-                node.frame()
+                node.frame(future=True)
                 assert len(records) == 1
         with self.assertRaises(ParentMissingError):
-            node.frame(future=True)
+            node.frame()
 
     def test_none(self) -> None:
         self._test(None)
@@ -641,9 +651,6 @@ class ConstNodeTest(unittest.TestCase):
     def test_unicode(self) -> None:
         self._test("a")
 
-    @pytest.mark.skipif(
-        not PY38_PLUS, reason="kind attribute for ast.Constant was added in 3.8"
-    )
     def test_str_kind(self):
         node = builder.extract_node(
             """
@@ -673,7 +680,6 @@ class NameNodeTest(unittest.TestCase):
             builder.parse(code)
 
 
-@pytest.mark.skipif(not PY38_PLUS, reason="needs assignment expressions")
 class TestNamedExprNode:
     """Tests for the NamedExpr node."""
 
@@ -710,35 +716,35 @@ class TestNamedExprNode:
         )
         function = module.body[0]
         assert function.args.frame() == function
-        assert function.args.frame(future=True) == function
+        assert function.args.frame() == function
 
         function_two = module.body[1]
         assert function_two.args.args[0].frame() == function_two
-        assert function_two.args.args[0].frame(future=True) == function_two
+        assert function_two.args.args[0].frame() == function_two
         assert function_two.args.args[1].frame() == function_two
-        assert function_two.args.args[1].frame(future=True) == function_two
+        assert function_two.args.args[1].frame() == function_two
         assert function_two.args.defaults[0].frame() == module
-        assert function_two.args.defaults[0].frame(future=True) == module
+        assert function_two.args.defaults[0].frame() == module
 
         inherited_class = module.body[3]
         assert inherited_class.keywords[0].frame() == inherited_class
-        assert inherited_class.keywords[0].frame(future=True) == inherited_class
+        assert inherited_class.keywords[0].frame() == inherited_class
         assert inherited_class.keywords[0].value.frame() == module
-        assert inherited_class.keywords[0].value.frame(future=True) == module
+        assert inherited_class.keywords[0].value.frame() == module
 
         lambda_assignment = module.body[4].value
         assert lambda_assignment.args.args[0].frame() == lambda_assignment
-        assert lambda_assignment.args.args[0].frame(future=True) == lambda_assignment
+        assert lambda_assignment.args.args[0].frame() == lambda_assignment
         assert lambda_assignment.args.defaults[0].frame() == module
-        assert lambda_assignment.args.defaults[0].frame(future=True) == module
+        assert lambda_assignment.args.defaults[0].frame() == module
 
         lambda_named_expr = module.body[5].args.defaults[0]
         assert lambda_named_expr.value.args.defaults[0].frame() == module
-        assert lambda_named_expr.value.args.defaults[0].frame(future=True) == module
+        assert lambda_named_expr.value.args.defaults[0].frame() == module
 
         comprehension = module.body[6].value
         assert comprehension.generators[0].ifs[0].frame() == module
-        assert comprehension.generators[0].ifs[0].frame(future=True) == module
+        assert comprehension.generators[0].ifs[0].frame() == module
 
     @staticmethod
     def test_scope() -> None:
@@ -998,7 +1004,7 @@ class AliasesTest(unittest.TestCase):
 
     def test_aliases(self) -> None:
         def test_from(node: ImportFrom) -> ImportFrom:
-            node.names = node.names + [("absolute_import", None)]
+            node.names = [*node.names, ("absolute_import", None)]
             return node
 
         def test_class(node: ClassDef) -> ClassDef:
@@ -1018,7 +1024,12 @@ class AliasesTest(unittest.TestCase):
         def test_assname(node: AssignName) -> AssignName | None:
             if node.name == "foo":
                 return nodes.AssignName(
-                    "bar", node.lineno, node.col_offset, node.parent
+                    "bar",
+                    node.lineno,
+                    node.col_offset,
+                    node.parent,
+                    end_lineno=node.end_lineno,
+                    end_col_offset=node.end_col_offset,
                 )
             return None
 
@@ -1232,7 +1243,6 @@ def test_unknown() -> None:
     assert isinstance(nodes.Unknown().qname(), str)
 
 
-@pytest.mark.skipif(not HAS_TYPED_AST, reason="requires typed_ast")
 def test_type_comments_with() -> None:
     module = builder.parse(
         """
@@ -1249,7 +1259,6 @@ def test_type_comments_with() -> None:
     assert ignored_node.type_annotation is None
 
 
-@pytest.mark.skipif(not HAS_TYPED_AST, reason="requires typed_ast")
 def test_type_comments_for() -> None:
     module = builder.parse(
         """
@@ -1267,7 +1276,6 @@ def test_type_comments_for() -> None:
     assert ignored_node.type_annotation is None
 
 
-@pytest.mark.skipif(not HAS_TYPED_AST, reason="requires typed_ast")
 def test_type_coments_assign() -> None:
     module = builder.parse(
         """
@@ -1283,7 +1291,6 @@ def test_type_coments_assign() -> None:
     assert ignored_node.type_annotation is None
 
 
-@pytest.mark.skipif(not HAS_TYPED_AST, reason="requires typed_ast")
 def test_type_comments_invalid_expression() -> None:
     module = builder.parse(
         """
@@ -1296,7 +1303,6 @@ def test_type_comments_invalid_expression() -> None:
         assert node.type_annotation is None
 
 
-@pytest.mark.skipif(not HAS_TYPED_AST, reason="requires typed_ast")
 def test_type_comments_invalid_function_comments() -> None:
     module = builder.parse(
         """
@@ -1316,7 +1322,6 @@ def test_type_comments_invalid_function_comments() -> None:
         assert node.type_comment_args is None
 
 
-@pytest.mark.skipif(not HAS_TYPED_AST, reason="requires typed_ast")
 def test_type_comments_function() -> None:
     module = builder.parse(
         """
@@ -1347,7 +1352,6 @@ def test_type_comments_function() -> None:
         assert node.type_comment_returns.as_string() == expected_returns_string
 
 
-@pytest.mark.skipif(not HAS_TYPED_AST, reason="requires typed_ast")
 def test_type_comments_arguments() -> None:
     module = builder.parse(
         """
@@ -1387,9 +1391,6 @@ def test_type_comments_arguments() -> None:
             assert actual_arg.as_string() == expected_arg
 
 
-@pytest.mark.skipif(
-    not PY38_PLUS, reason="needs to be able to parse positional only arguments"
-)
 def test_type_comments_posonly_arguments() -> None:
     module = builder.parse(
         """
@@ -1425,7 +1426,6 @@ def test_type_comments_posonly_arguments() -> None:
                 assert actual_arg.as_string() == expected_arg
 
 
-@pytest.mark.skipif(not HAS_TYPED_AST, reason="requires typed_ast")
 def test_correct_function_type_comment_parent() -> None:
     data = """
         def f(a):
@@ -1507,7 +1507,6 @@ def test_f_string_correct_line_numbering() -> None:
     assert node.last_child().last_child().lineno == 5
 
 
-@pytest.mark.skipif(not PY38_PLUS, reason="needs assignment expressions")
 def test_assignment_expression() -> None:
     code = """
     if __(a := 1):
@@ -1530,7 +1529,6 @@ def test_assignment_expression() -> None:
     assert second.as_string() == "b := test"
 
 
-@pytest.mark.skipif(not PY38_PLUS, reason="needs assignment expressions")
 def test_assignment_expression_in_functiondef() -> None:
     code = """
     def function(param = (assignment := "walrus")):
@@ -1614,9 +1612,6 @@ def test_get_doc() -> None:
     """
     )
     node: nodes.FunctionDef = astroid.extract_node(code)  # type: ignore[assignment]
-    with pytest.warns(DeprecationWarning) as records:
-        assert node.doc == "Docstring"
-        assert len(records) == 1
     assert isinstance(node.doc_node, nodes.Const)
     assert node.doc_node.value == "Docstring"
     assert node.doc_node.lineno == 2
@@ -1632,9 +1627,6 @@ def test_get_doc() -> None:
     """
     )
     node = astroid.extract_node(code)
-    with pytest.warns(DeprecationWarning) as records:
-        assert node.doc is None
-        assert len(records) == 1
     assert node.doc_node is None
 
 
@@ -1645,7 +1637,6 @@ def test_parse_fstring_debug_mode() -> None:
     assert node.as_string() == "f'3={3!r}'"
 
 
-@pytest.mark.skipif(not HAS_TYPED_AST, reason="requires typed_ast")
 def test_parse_type_comments_with_proper_parent() -> None:
     code = """
     class D: #@
@@ -1966,3 +1957,72 @@ class TestPatternMatching:
         inferred = node.inferred()
         assert len(inferred) == 2
         assert [inf.value for inf in inferred] == [10, -1]
+
+
+@pytest.mark.parametrize(
+    "node",
+    [
+        node
+        for node in astroid.nodes.ALL_NODE_CLASSES
+        if node.__name__ not in ["BaseContainer", "NodeNG", "const_factory"]
+    ],
+)
+@pytest.mark.filterwarnings("error")
+def test_str_repr_no_warnings(node):
+    parameters = inspect.signature(node.__init__).parameters
+
+    args = {}
+    for name, param_type in parameters.items():
+        if name == "self":
+            continue
+
+        if "int" in param_type.annotation:
+            args[name] = random.randint(0, 50)
+        elif (
+            "NodeNG" in param_type.annotation
+            or "SuccessfulInferenceResult" in param_type.annotation
+        ):
+            args[name] = nodes.Unknown()
+        elif "str" in param_type.annotation:
+            args[name] = ""
+        else:
+            args[name] = None
+
+    test_node = node(**args)
+    str(test_node)
+    repr(test_node)
+
+
+def test_arguments_contains_all():
+    """Ensure Arguments.arguments actually returns all available arguments"""
+
+    def manually_get_args(arg_node) -> set:
+        names = set()
+        if arg_node.args.vararg:
+            names.add(arg_node.args.vararg)
+        if arg_node.args.kwarg:
+            names.add(arg_node.args.kwarg)
+
+        names.update([x.name for x in arg_node.args.args])
+        names.update([x.name for x in arg_node.args.kwonlyargs])
+
+        return names
+
+    node = extract_node("""def a(fruit: str, *args, b=None, c=None, **kwargs): ...""")
+    assert manually_get_args(node) == {x.name for x in node.args.arguments}
+
+    node = extract_node("""def a(mango: int, b="banana", c=None, **kwargs): ...""")
+    assert manually_get_args(node) == {x.name for x in node.args.arguments}
+
+    node = extract_node("""def a(self, num = 10, *args): ...""")
+    assert manually_get_args(node) == {x.name for x in node.args.arguments}
+
+
+def test_arguments_default_value():
+    node = extract_node(
+        "def fruit(eat='please', *, peel='no', trim='yes', **kwargs): ..."
+    )
+    assert node.args.default_value("eat").value == "please"
+
+    node = extract_node("def fruit(seeds, flavor='good', *, peel='maybe'): ...")
+    assert node.args.default_value("flavor").value == "good"
