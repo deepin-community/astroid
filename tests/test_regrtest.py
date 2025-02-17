@@ -11,6 +11,7 @@ import pytest
 
 from astroid import MANAGER, Instance, bases, manager, nodes, parse, test_utils
 from astroid.builder import AstroidBuilder, _extract_single_node, extract_node
+from astroid.const import PY312_PLUS
 from astroid.context import InferenceContext
 from astroid.exceptions import InferenceError
 from astroid.raw_building import build_module
@@ -100,7 +101,7 @@ multiply([1, 2], [3, 4])
         inferred = callfunc.inferred()
         self.assertEqual(len(inferred), 1)
 
-    @unittest.skipUnless(HAS_NUMPY, "Needs numpy")
+    @unittest.skipUnless(HAS_NUMPY and not PY312_PLUS, "Needs numpy and < Python 3.12")
     def test_numpy_distutils(self):
         """Special handling of virtualenv's patching of distutils shouldn't interfere
         with numpy.distutils.
@@ -477,3 +478,22 @@ def test_recursion_during_inference(mocked) -> None:
     with pytest.raises(InferenceError) as error:
         next(node.infer())
     assert error.value.message.startswith("RecursionError raised")
+
+
+def test_regression_missing_callcontext() -> None:
+    node: nodes.Attribute = _extract_single_node(
+        textwrap.dedent(
+            """
+        import functools
+
+        class MockClass:
+            def _get_option(self, option):
+                return "mystr"
+
+            enabled = property(functools.partial(_get_option, option='myopt'))
+
+        MockClass().enabled
+        """
+        )
+    )
+    assert node.inferred()[0].value == "mystr"

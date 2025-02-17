@@ -19,7 +19,6 @@ from functools import cached_property, lru_cache
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, NoReturn, TypeVar
 
 from astroid import bases, protocols, util
-from astroid.const import IS_PYPY, PY38, PY39_PLUS, PYPY_7_3_11_PLUS
 from astroid.context import (
     CallContext,
     InferenceContext,
@@ -603,7 +602,7 @@ class Module(LocalsDictNodeNG):
 
     def _infer(
         self, context: InferenceContext | None = None, **kwargs: Any
-    ) -> Generator[Module, None, None]:
+    ) -> Generator[Module]:
         yield self
 
 
@@ -1053,7 +1052,7 @@ class Lambda(_base_nodes.FilterStmtsBaseNode, LocalsDictNodeNG):
 
     def _infer(
         self, context: InferenceContext | None = None, **kwargs: Any
-    ) -> Generator[Lambda, None, None]:
+    ) -> Generator[Lambda]:
         yield self
 
     def _get_yield_nodes_skip_functions(self):
@@ -1557,8 +1556,6 @@ class FunctionDef(
         :returns: What the function yields
         :rtype: iterable(NodeNG or Uninferable) or None
         """
-        # pylint: disable=not-an-iterable
-        # https://github.com/pylint-dev/astroid/issues/1015
         for yield_ in self.nodes_of_class(node_classes.Yield):
             if yield_.value is None:
                 const = node_classes.Const(None)
@@ -1738,7 +1735,11 @@ class AsyncFunctionDef(FunctionDef):
     """
 
 
-def _is_metaclass(klass, seen=None, context: InferenceContext | None = None) -> bool:
+def _is_metaclass(
+    klass: ClassDef,
+    seen: set[str] | None = None,
+    context: InferenceContext | None = None,
+) -> bool:
     """Return if the given class can be
     used as a metaclass.
     """
@@ -1770,7 +1771,11 @@ def _is_metaclass(klass, seen=None, context: InferenceContext | None = None) -> 
     return False
 
 
-def _class_type(klass, ancestors=None, context: InferenceContext | None = None):
+def _class_type(
+    klass: ClassDef,
+    ancestors: set[str] | None = None,
+    context: InferenceContext | None = None,
+) -> Literal["class", "exception", "metaclass"]:
     """return a ClassDef node type to differ metaclass and exception
     from 'regular' classes
     """
@@ -1793,7 +1798,7 @@ def _class_type(klass, ancestors=None, context: InferenceContext | None = None):
         for base in klass.ancestors(recurs=False):
             name = _class_type(base, ancestors)
             if name != "class":
-                if name == "metaclass" and not _is_metaclass(klass):
+                if name == "metaclass" and klass._type != "metaclass":
                     # don't propagate it if the current class
                     # can't be a metaclass
                     continue
@@ -1862,7 +1867,7 @@ class ClassDef(  # pylint: disable=too-many-instance-attributes
     :type: objectmodel.ClassModel
     """
 
-    _type = None
+    _type: Literal["class", "exception", "metaclass"] | None = None
     _metaclass: NodeNG | None = None
     _metaclass_hack = False
     hide = False
@@ -1949,7 +1954,10 @@ class ClassDef(  # pylint: disable=too-many-instance-attributes
         """
         locals_ = (("__module__", self.special_attributes.attr___module__),)
         # __qualname__ is defined in PEP3155
-        locals_ += (("__qualname__", self.special_attributes.attr___qualname__),)
+        locals_ += (
+            ("__qualname__", self.special_attributes.attr___qualname__),
+            ("__annotations__", self.special_attributes.attr___annotations__),
+        )
         return locals_
 
     # pylint: disable=redefined-outer-name
@@ -2002,26 +2010,6 @@ class ClassDef(  # pylint: disable=too-many-instance-attributes
         _newstyle_impl,
         doc=("Whether this is a new style class or not\n\n" ":type: bool or None"),
     )
-
-    @cached_property
-    def fromlineno(self) -> int:
-        """The first line that this node appears on in the source code.
-
-        Can also return 0 if the line can not be determined.
-        """
-        if IS_PYPY and PY38 and not PYPY_7_3_11_PLUS:
-            # For Python < 3.8 the lineno is the line number of the first decorator.
-            # We want the class statement lineno. Similar to 'FunctionDef.fromlineno'
-            # PyPy (3.8): Fixed with version v7.3.11
-            lineno = self.lineno or 0
-            if self.decorators is not None:
-                lineno += sum(
-                    node.tolineno - (node.lineno or 0) + 1
-                    for node in self.decorators.nodes
-                )
-
-            return lineno or 0
-        return super().fromlineno
 
     @cached_property
     def blockstart_tolineno(self):
@@ -2234,7 +2222,7 @@ class ClassDef(  # pylint: disable=too-many-instance-attributes
 
     def ancestors(
         self, recurs: bool = True, context: InferenceContext | None = None
-    ) -> Generator[ClassDef, None, None]:
+    ) -> Generator[ClassDef]:
         """Iterate over the base classes in prefixed depth first order.
 
         :param recurs: Whether to recurse or return direct ancestors only.
@@ -2518,6 +2506,16 @@ class ClassDef(  # pylint: disable=too-many-instance-attributes
                     if attr.parent and attr.parent.scope() == first_scope
                 ]
             functions = [attr for attr in attributes if isinstance(attr, FunctionDef)]
+            setter = None
+            for function in functions:
+                dec_names = function.decoratornames(context=context)
+                for dec_name in dec_names:
+                    if dec_name is util.Uninferable:
+                        continue
+                    if dec_name.split(".")[-1] == "setter":
+                        setter = function
+                if setter:
+                    break
             if functions:
                 # Prefer only the last function, unless a property is involved.
                 last_function = functions[-1]
@@ -2541,6 +2539,10 @@ class ClassDef(  # pylint: disable=too-many-instance-attributes
                 elif isinstance(inferred, objects.Property):
                     function = inferred.function
                     if not class_context:
+                        if not context.callcontext and not setter:
+                            context.callcontext = CallContext(
+                                args=function.args.arguments, callee=function
+                            )
                         # Through an instance so we can solve the property
                         yield from function.infer_call_result(
                             caller=self, context=context
@@ -2640,7 +2642,6 @@ class ClassDef(  # pylint: disable=too-many-instance-attributes
             if (
                 isinstance(method, node_classes.EmptyNode)
                 and self.pytype() == "builtins.type"
-                and PY39_PLUS
             ):
                 return self
             raise
@@ -2984,5 +2985,5 @@ class ClassDef(  # pylint: disable=too-many-instance-attributes
 
     def _infer(
         self, context: InferenceContext | None = None, **kwargs: Any
-    ) -> Generator[ClassDef, None, None]:
+    ) -> Generator[ClassDef]:
         yield self

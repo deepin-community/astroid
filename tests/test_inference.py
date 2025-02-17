@@ -19,6 +19,8 @@ from unittest.mock import patch
 import pytest
 
 from astroid import (
+    Assign,
+    Const,
     Slice,
     Uninferable,
     arguments,
@@ -32,7 +34,7 @@ from astroid import decorators as decoratorsmod
 from astroid.arguments import CallSite
 from astroid.bases import BoundMethod, Generator, Instance, UnboundMethod, UnionType
 from astroid.builder import AstroidBuilder, _extract_single_node, extract_node, parse
-from astroid.const import IS_PYPY, PY39_PLUS, PY310_PLUS, PY312_PLUS
+from astroid.const import IS_PYPY, PY310_PLUS, PY312_PLUS
 from astroid.context import CallContext, InferenceContext
 from astroid.exceptions import (
     AstroidTypeError,
@@ -651,6 +653,19 @@ class InferenceTest(resources.SysPathSetup, unittest.TestCase):
                 for inferred, value in zip(ast["fct"].infer(), values)
             )
         )
+
+    def test_fstring_inference(self) -> None:
+        code = """
+            name = "John"
+            result = f"Hello {name}!"
+            """
+        ast = parse(code, __name__)
+        node = ast["result"]
+        inferred = node.inferred()
+        self.assertEqual(len(inferred), 1)
+        value_node = inferred[0]
+        self.assertIsInstance(value_node, Const)
+        self.assertEqual(value_node.value, "Hello John!")
 
     def test_float_complex_ambiguity(self) -> None:
         code = '''
@@ -2732,16 +2747,20 @@ class InferenceTest(resources.SysPathSetup, unittest.TestCase):
             msg.format(op="+=", lhs="int", rhs="list"),
         ]
 
-        # PEP-584 supports | for dictionary union
-        if not PY39_PLUS:
-            ast_nodes.append(extract_node("{} | {} #@"))
-            expected.append(msg.format(op="|", lhs="dict", rhs="dict"))
-
         for node, expected_value in zip(ast_nodes, expected):
             errors = node.type_errors()
             self.assertEqual(len(errors), 1)
             error = errors[0]
             self.assertEqual(str(error), expected_value)
+
+    def test_binary_type_errors_partially_uninferable(self) -> None:
+        def patched_infer_binop(context):
+            return iter([util.BadBinaryOperationMessage(None, None, None), Uninferable])
+
+        binary_op_node = extract_node("0 + 0")
+        binary_op_node._infer_binop = patched_infer_binop
+        errors = binary_op_node.type_errors()
+        self.assertEqual(errors, [])
 
     def test_unary_type_errors(self) -> None:
         ast_nodes = extract_node(
@@ -2809,6 +2828,15 @@ class InferenceTest(resources.SysPathSetup, unittest.TestCase):
         errors = node.type_errors()
         self.assertEqual(len(errors), 1)
         self.assertEqual(str(errors[0]), "bad operand type for unary ~: slice")
+
+    def test_unary_type_errors_partially_uninferable(self) -> None:
+        def patched_infer_unary_op(context):
+            return iter([util.BadUnaryOperationMessage(None, None, "msg"), Uninferable])
+
+        unary_op_node = extract_node("~0")
+        unary_op_node._infer_unaryop = patched_infer_unary_op
+        errors = unary_op_node.type_errors()
+        self.assertEqual(errors, [])
 
     def test_bool_value_recursive(self) -> None:
         pairs = [
@@ -3527,6 +3555,15 @@ class InferenceTest(resources.SysPathSetup, unittest.TestCase):
         inferred = next(ast_node.infer())
         self.assertIsInstance(inferred, Instance)
         self.assertEqual(inferred.name, "B")
+
+    def test_augop_type_errors_partially_uninferable(self) -> None:
+        def patched_infer_augassign(context) -> None:
+            return iter([util.BadBinaryOperationMessage(None, None, None), Uninferable])
+
+        aug_op_node = extract_node("__name__ += 'test'")
+        aug_op_node._infer_augassign = patched_infer_augassign
+        errors = aug_op_node.type_errors()
+        self.assertEqual(errors, [])
 
     def test_string_interpolation(self):
         ast_nodes = extract_node(
@@ -4380,6 +4417,23 @@ class InferenceTest(resources.SysPathSetup, unittest.TestCase):
         inferred = list(node.inferred())
         assert [const.value for const in inferred] == [42, False]
 
+    def test_infer_property_setter(self) -> None:
+        node = extract_node(
+            """
+        class PropertyWithSetter:
+            @property
+            def host(self):
+                return self._host
+
+            @host.setter
+            def host(self, value: str):
+                self._host = value
+
+        PropertyWithSetter().host #@
+        """
+        )
+        assert not isinstance(next(node.infer()), Instance)
+
     def test_delayed_attributes_without_slots(self) -> None:
         ast_node = extract_node(
             """
@@ -4458,8 +4512,7 @@ class InferenceTest(resources.SysPathSetup, unittest.TestCase):
         # and reraise it as a TypeError in Class.getitem
         node = extract_node(
             """
-        def test():
-            yield
+        def test(): ...
         test()
         """
         )
@@ -4489,7 +4542,6 @@ class InferenceTest(resources.SysPathSetup, unittest.TestCase):
         inferred = next(node.infer())
         assert inferred is util.Uninferable
 
-    @test_utils.require_version(minver="3.9")
     def test_infer_arg_called_type_when_used_as_index_is_uninferable(self):
         # https://github.com/pylint-dev/astroid/pull/958
         node = extract_node(
@@ -4504,7 +4556,6 @@ class InferenceTest(resources.SysPathSetup, unittest.TestCase):
         assert not isinstance(inferred, nodes.ClassDef)  # was inferred as builtins.type
         assert inferred is util.Uninferable
 
-    @test_utils.require_version(minver="3.9")
     def test_infer_arg_called_type_when_used_as_subscript_is_uninferable(self):
         # https://github.com/pylint-dev/astroid/pull/958
         node = extract_node(
@@ -4517,7 +4568,6 @@ class InferenceTest(resources.SysPathSetup, unittest.TestCase):
         assert not isinstance(inferred, nodes.ClassDef)  # was inferred as builtins.type
         assert inferred is util.Uninferable
 
-    @test_utils.require_version(minver="3.9")
     def test_infer_arg_called_type_defined_in_outer_scope_is_uninferable(self):
         # https://github.com/pylint-dev/astroid/pull/958
         node = extract_node(
@@ -5470,6 +5520,51 @@ class ObjectDunderNewTest(unittest.TestCase):
         self.assertIsInstance(inferred, Instance)
 
 
+@pytest.mark.parametrize(
+    "code, result",
+    [
+        # regular f-string
+        (
+            """width = 10
+precision = 4
+value = 12.34567
+result = f"result: {value:{width}.{precision}}!"
+""",
+            "result:      12.35!",
+        ),
+        # unsupported format
+        (
+            """width = None
+precision = 4
+value = 12.34567
+result = f"result: {value:{width}.{precision}}!"
+""",
+            None,
+        ),
+        # unsupported value
+        (
+            """width = 10
+precision = 4
+value = None
+result = f"result: {value:{width}.{precision}}!"
+""",
+            None,
+        ),
+    ],
+)
+def test_formatted_fstring_inference(code, result) -> None:
+    ast = parse(code, __name__)
+    node = ast["result"]
+    inferred = node.inferred()
+    assert len(inferred) == 1
+    value_node = inferred[0]
+    if result is None:
+        assert value_node is util.Uninferable
+    else:
+        assert isinstance(value_node, Const)
+        assert value_node.value == result
+
+
 def test_augassign_recursion() -> None:
     """Make sure inference doesn't throw a RecursionError.
 
@@ -6354,7 +6449,6 @@ def test_assert_last_function_returns_none_on_inference() -> None:
     assert inferred.value is None
 
 
-@test_utils.require_version(minver="3.8")
 def test_posonlyargs_inference() -> None:
     code = """
     class A:
@@ -6742,34 +6836,6 @@ def test_custom_decorators_for_classmethod_and_staticmethods(code, obj, obj_type
     assert inferred.type == obj_type
 
 
-@pytest.mark.skipif(
-    PY39_PLUS,
-    reason="Exact inference with dataclasses (replace function) in python3.9",
-)
-def test_dataclasses_subscript_inference_recursion_error():
-    code = """
-    from dataclasses import dataclass, replace
-
-    @dataclass
-    class ProxyConfig:
-        auth: str = "/auth"
-
-
-    a = ProxyConfig("")
-    test_dict = {"proxy" : {"auth" : "", "bla" : "f"}}
-
-    foo = test_dict['proxy']
-    replace(a, **test_dict['proxy']) # This fails
-    """
-    node = extract_node(code)
-    # Reproduces only with safe_infer()
-    assert util.safe_infer(node) is None
-
-
-@pytest.mark.skipif(
-    not PY39_PLUS,
-    reason="Exact inference with dataclasses (replace function) in python3.9",
-)
 def test_dataclasses_subscript_inference_recursion_error_39():
     code = """
     from dataclasses import dataclass, replace
@@ -7315,3 +7381,41 @@ def test_sys_argv_uninferable() -> None:
     sys_argv_value = list(a._infer())
     assert len(sys_argv_value) == 1
     assert sys_argv_value[0] is Uninferable
+
+
+def test_empty_format_spec() -> None:
+    """Regression test for https://github.com/pylint-dev/pylint/issues/9945."""
+    node = extract_node('f"{x:}"')
+    assert isinstance(node, nodes.JoinedStr)
+
+    assert list(node.infer()) == [util.Uninferable]
+
+
+@pytest.mark.parametrize(
+    "source, expected",
+    [
+        (
+            """
+class Cls:
+    # pylint: disable=too-few-public-methods
+    pass
+
+c_obj = Cls()
+
+s1 = f'{c_obj!r}' #@
+""",
+            "<__main__.Cls",
+        ),
+        ("s1 = f'{5}' #@", "5"),
+    ],
+)
+def test_joined_str_returns_string(source, expected) -> None:
+    """Regression test for https://github.com/pylint-dev/pylint/issues/9947."""
+    node = extract_node(source)
+    assert isinstance(node, Assign)
+    target = node.targets[0]
+    assert target
+    inferred = list(target.inferred())
+    assert len(inferred) == 1
+    assert isinstance(inferred[0], Const)
+    inferred[0].value.startswith(expected)

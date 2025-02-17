@@ -16,7 +16,7 @@ import pytest
 
 import astroid
 from astroid import manager, test_utils
-from astroid.const import IS_JYTHON, IS_PYPY
+from astroid.const import IS_JYTHON, IS_PYPY, PY312_PLUS
 from astroid.exceptions import (
     AstroidBuildingError,
     AstroidImportError,
@@ -391,13 +391,18 @@ class AstroidManagerTest(resources.SysPathSetup, unittest.TestCase):
 
 
 class IsolatedAstroidManagerTest(unittest.TestCase):
+    @pytest.mark.skipif(PY312_PLUS, reason="distutils was removed in python 3.12")
     def test_no_user_warning(self):
+        """When Python 3.12 is minimum, this test will no longer provide value."""
         mgr = manager.AstroidManager()
         self.addCleanup(mgr.clear_cache)
         with warnings.catch_warnings():
             warnings.filterwarnings("error", category=UserWarning)
             mgr.ast_from_module_name("setuptools")
-            mgr.ast_from_module_name("pip")
+            try:
+                mgr.ast_from_module_name("pip")
+            except astroid.AstroidImportError:
+                pytest.skip("pip is not installed")
 
 
 class BorgAstroidManagerTC(unittest.TestCase):
@@ -485,6 +490,32 @@ class ClearCacheTest(unittest.TestCase):
             with self.subTest(cleared_cache=cleared_cache):
                 # less equal because the "baseline" might have had multiple calls to bootstrap()
                 self.assertLessEqual(cleared_cache.currsize, baseline_cache.currsize)
+
+    def test_file_cache_after_clear_cache(self) -> None:
+        """Test to mimic the behavior of how pylint lints file and
+        ensure clear cache clears everything stored in the cache.
+        See https://github.com/pylint-dev/pylint/pull/9932#issuecomment-2364985551
+        for more information.
+        """
+        orig_sys_path = sys.path[:]
+        try:
+            search_path = resources.RESOURCE_PATH
+            sys.path.insert(0, search_path)
+            node = astroid.MANAGER.ast_from_file(resources.find("data/cache/a.py"))
+            self.assertEqual(node.name, "cache.a")
+
+            # This import from statement should succeed and update the astroid cache
+            importfrom_node = astroid.extract_node("from cache import a")
+            importfrom_node.do_import_module(importfrom_node.modname)
+        finally:
+            sys.path = orig_sys_path
+
+        astroid.MANAGER.clear_cache()
+
+        importfrom_node = astroid.extract_node("from cache import a")
+        # Try import from again after clear cache, this should raise an error
+        with self.assertRaises(AstroidBuildingError):
+            importfrom_node.do_import_module(importfrom_node.modname)
 
     def test_brain_plugins_reloaded_after_clearing_cache(self) -> None:
         astroid.MANAGER.clear_cache()
