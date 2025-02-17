@@ -5,8 +5,6 @@
 #export DH_VERBOSE=1
 
 export PYBUILD_NAME=astroid
-export PYBUILD_BEFORE_TEST=cp -r {dir}/tests {build_dir}/astroid/
-export PYBUILD_AFTER_TEST=rm -r {build_dir}/astroid/tests
 
 %:
 	dh $@ --buildsystem pybuild

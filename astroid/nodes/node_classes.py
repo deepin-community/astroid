@@ -13,12 +13,11 @@ import operator
 import sys
 import typing
 import warnings
-from collections.abc import Generator, Iterable, Iterator, Mapping
+from collections.abc import Callable, Generator, Iterable, Iterator, Mapping
 from functools import cached_property
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     ClassVar,
     Literal,
     Optional,
@@ -77,17 +76,17 @@ AssignedStmtsCall = Callable[
         _NodesT,
         AssignedStmtsPossibleNode,
         Optional[InferenceContext],
-        Optional[typing.List[int]],
+        Optional[list[int]],
     ],
     Any,
 ]
 InferBinaryOperation = Callable[
     [_NodesT, Optional[InferenceContext]],
-    typing.Generator[Union[InferenceResult, _BadOpMessageT], None, None],
+    Generator[Union[InferenceResult, _BadOpMessageT]],
 ]
 InferLHS = Callable[
     [_NodesT, Optional[InferenceContext]],
-    typing.Generator[InferenceResult, None, Optional[InferenceErrorInfo]],
+    Generator[InferenceResult, None, Optional[InferenceErrorInfo]],
 ]
 InferUnaryOp = Callable[[_NodesT, str], ConstFactoryResult]
 
@@ -738,7 +737,7 @@ class Arguments(
         self.vararg_node = vararg_node
         self.kwarg_node = kwarg_node
 
-    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-arguments, too-many-positional-arguments
     def postinit(
         self,
         args: list[AssignName] | None,
@@ -1029,7 +1028,7 @@ class Arguments(
     @decorators.raise_if_nothing_inferred
     def _infer(
         self: nodes.Arguments, context: InferenceContext | None = None, **kwargs: Any
-    ) -> Generator[InferenceResult, None, None]:
+    ) -> Generator[InferenceResult]:
         # pylint: disable-next=import-outside-toplevel
         from astroid.protocols import _arguments_infer_argname
 
@@ -1057,6 +1056,8 @@ def _format_args(
         annotations = []
     if defaults is not None:
         default_offset = len(args) - len(defaults)
+    else:
+        default_offset = None
     packed = itertools.zip_longest(args, annotations)
     for i, (arg, annotation) in enumerate(packed):
         if arg.name in skippable_names:
@@ -1071,7 +1072,7 @@ def _format_args(
                 default_sep = " = "
             values.append(argname)
 
-            if defaults is not None and i >= default_offset:
+            if default_offset is not None and i >= default_offset:
                 if defaults[i - default_offset] is not None:
                     values[-1] += default_sep + defaults[i - default_offset].as_string()
     return ", ".join(values)
@@ -1379,24 +1380,26 @@ class AugAssign(
     See astroid/protocols.py for actual implementation.
     """
 
-    def type_errors(self, context: InferenceContext | None = None):
+    def type_errors(
+        self, context: InferenceContext | None = None
+    ) -> list[util.BadBinaryOperationMessage]:
         """Get a list of type errors which can occur during inference.
 
         Each TypeError is represented by a :class:`BadBinaryOperationMessage` ,
         which holds the original exception.
 
-        :returns: The list of possible type errors.
-        :rtype: list(BadBinaryOperationMessage)
+        If any inferred result is uninferable, an empty list is returned.
         """
+        bad = []
         try:
-            results = self._infer_augassign(context=context)
-            return [
-                result
-                for result in results
-                if isinstance(result, util.BadBinaryOperationMessage)
-            ]
+            for result in self._infer_augassign(context=context):
+                if result is util.Uninferable:
+                    raise InferenceError
+                if isinstance(result, util.BadBinaryOperationMessage):
+                    bad.append(result)
         except InferenceError:
             return []
+        return bad
 
     def get_children(self):
         yield self.target
@@ -1414,7 +1417,7 @@ class AugAssign(
 
     def _infer_augassign(
         self, context: InferenceContext | None = None
-    ) -> Generator[InferenceResult | util.BadBinaryOperationMessage, None, None]:
+    ) -> Generator[InferenceResult | util.BadBinaryOperationMessage]:
         """Inference logic for augmented binary operations."""
         context = context or InferenceContext()
 
@@ -1444,7 +1447,7 @@ class AugAssign(
     @decorators.path_wrapper
     def _infer(
         self: nodes.AugAssign, context: InferenceContext | None = None, **kwargs: Any
-    ) -> Generator[InferenceResult, None, None]:
+    ) -> Generator[InferenceResult]:
         return self._filter_operation_errors(
             self._infer_augassign, context, util.BadBinaryOperationMessage
         )
@@ -1495,24 +1498,26 @@ class BinOp(_base_nodes.OperatorNode):
         self.left = left
         self.right = right
 
-    def type_errors(self, context: InferenceContext | None = None):
+    def type_errors(
+        self, context: InferenceContext | None = None
+    ) -> list[util.BadBinaryOperationMessage]:
         """Get a list of type errors which can occur during inference.
 
         Each TypeError is represented by a :class:`BadBinaryOperationMessage`,
         which holds the original exception.
 
-        :returns: The list of possible type errors.
-        :rtype: list(BadBinaryOperationMessage)
+        If any inferred result is uninferable, an empty list is returned.
         """
+        bad = []
         try:
-            results = self._infer_binop(context=context)
-            return [
-                result
-                for result in results
-                if isinstance(result, util.BadBinaryOperationMessage)
-            ]
+            for result in self._infer_binop(context=context):
+                if result is util.Uninferable:
+                    raise InferenceError
+                if isinstance(result, util.BadBinaryOperationMessage):
+                    bad.append(result)
         except InferenceError:
             return []
+        return bad
 
     def get_children(self):
         yield self.left
@@ -1527,7 +1532,7 @@ class BinOp(_base_nodes.OperatorNode):
 
     def _infer_binop(
         self, context: InferenceContext | None = None, **kwargs: Any
-    ) -> Generator[InferenceResult, None, None]:
+    ) -> Generator[InferenceResult]:
         """Binary operation inference logic."""
         left = self.left
         right = self.right
@@ -1557,7 +1562,7 @@ class BinOp(_base_nodes.OperatorNode):
     @decorators.path_wrapper
     def _infer(
         self: nodes.BinOp, context: InferenceContext | None = None, **kwargs: Any
-    ) -> Generator[InferenceResult, None, None]:
+    ) -> Generator[InferenceResult]:
         return self._filter_operation_errors(
             self._infer_binop, context, util.BadBinaryOperationMessage
         )
@@ -1906,7 +1911,7 @@ class Compare(NodeNG):
 
     def _infer(
         self, context: InferenceContext | None = None, **kwargs: Any
-    ) -> Generator[nodes.Const | util.UninferableBase, None, None]:
+    ) -> Generator[nodes.Const | util.UninferableBase]:
         """Chained comparison inference logic."""
         retval: bool | util.UninferableBase = True
 
@@ -2556,7 +2561,7 @@ class EmptyNode(_base_nodes.NoChildrenNode):
     @decorators.path_wrapper
     def _infer(
         self, context: InferenceContext | None = None, **kwargs: Any
-    ) -> Generator[InferenceResult, None, None]:
+    ) -> Generator[InferenceResult]:
         if not self.has_underlying_object():
             yield util.Uninferable
         else:
@@ -2846,7 +2851,7 @@ class ImportFrom(_base_nodes.ImportNode):
         context: InferenceContext | None = None,
         asname: bool = True,
         **kwargs: Any,
-    ) -> Generator[InferenceResult, None, None]:
+    ) -> Generator[InferenceResult]:
         """Infer a ImportFrom node: return the imported module/object."""
         context = context or InferenceContext()
         name = context.lookupname
@@ -2971,7 +2976,7 @@ class Global(_base_nodes.NoChildrenNode, _base_nodes.Statement):
     @decorators.path_wrapper
     def _infer(
         self, context: InferenceContext | None = None, **kwargs: Any
-    ) -> Generator[InferenceResult, None, None]:
+    ) -> Generator[InferenceResult]:
         if context is None or context.lookupname is None:
             raise InferenceError(node=self, context=context)
         try:
@@ -3088,7 +3093,7 @@ class IfExp(NodeNG):
     @decorators.raise_if_nothing_inferred
     def _infer(
         self, context: InferenceContext | None = None, **kwargs: Any
-    ) -> Generator[InferenceResult, None, None]:
+    ) -> Generator[InferenceResult]:
         """Support IfExp inference.
 
         If we can't infer the truthiness of the condition, we default
@@ -3177,7 +3182,7 @@ class Import(_base_nodes.ImportNode):
         context: InferenceContext | None = None,
         asname: bool = True,
         **kwargs: Any,
-    ) -> Generator[nodes.Module, None, None]:
+    ) -> Generator[nodes.Module]:
         """Infer an Import node: return the imported module/object."""
         context = context or InferenceContext()
         name = context.lookupname
@@ -4118,7 +4123,7 @@ class TypeAlias(_base_nodes.AssignTypeNode, _base_nodes.Statement):
                 InferenceContext | None,
                 None,
             ],
-            Generator[NodeNG, None, None],
+            Generator[NodeNG],
         ]
     ] = protocols.assign_assigned_stmts
 
@@ -4260,24 +4265,26 @@ class UnaryOp(_base_nodes.OperatorNode):
     def postinit(self, operand: NodeNG) -> None:
         self.operand = operand
 
-    def type_errors(self, context: InferenceContext | None = None):
+    def type_errors(
+        self, context: InferenceContext | None = None
+    ) -> list[util.BadUnaryOperationMessage]:
         """Get a list of type errors which can occur during inference.
 
         Each TypeError is represented by a :class:`BadUnaryOperationMessage`,
         which holds the original exception.
 
-        :returns: The list of possible type errors.
-        :rtype: list(BadUnaryOperationMessage)
+        If any inferred result is uninferable, an empty list is returned.
         """
+        bad = []
         try:
-            results = self._infer_unaryop(context=context)
-            return [
-                result
-                for result in results
-                if isinstance(result, util.BadUnaryOperationMessage)
-            ]
+            for result in self._infer_unaryop(context=context):
+                if result is util.Uninferable:
+                    raise InferenceError
+                if isinstance(result, util.BadUnaryOperationMessage):
+                    bad.append(result)
         except InferenceError:
             return []
+        return bad
 
     def get_children(self):
         yield self.operand
@@ -4666,6 +4673,40 @@ class FormattedValue(NodeNG):
         if self.format_spec is not None:
             yield self.format_spec
 
+    def _infer(
+        self, context: InferenceContext | None = None, **kwargs: Any
+    ) -> Generator[InferenceResult, None, InferenceErrorInfo | None]:
+        format_specs = Const("") if self.format_spec is None else self.format_spec
+        uninferable_already_generated = False
+        for format_spec in format_specs.infer(context, **kwargs):
+            if not isinstance(format_spec, Const):
+                if not uninferable_already_generated:
+                    yield util.Uninferable
+                    uninferable_already_generated = True
+                continue
+            for value in self.value.infer(context, **kwargs):
+                value_to_format = value
+                if isinstance(value, Const):
+                    value_to_format = value.value
+                try:
+                    formatted = format(value_to_format, format_spec.value)
+                    yield Const(
+                        formatted,
+                        lineno=self.lineno,
+                        col_offset=self.col_offset,
+                        end_lineno=self.end_lineno,
+                        end_col_offset=self.end_col_offset,
+                    )
+                    continue
+                except (ValueError, TypeError):
+                    # happens when format_spec.value is invalid
+                    yield util.Uninferable
+                    uninferable_already_generated = True
+                continue
+
+
+MISSING_VALUE = "{MISSING_VALUE}"
+
 
 class JoinedStr(NodeNG):
     """Represents a list of string expressions to be joined.
@@ -4726,6 +4767,37 @@ class JoinedStr(NodeNG):
 
     def get_children(self):
         yield from self.values
+
+    def _infer(
+        self, context: InferenceContext | None = None, **kwargs: Any
+    ) -> Generator[InferenceResult, None, InferenceErrorInfo | None]:
+        yield from self._infer_from_values(self.values, context)
+
+    @classmethod
+    def _infer_from_values(
+        cls, nodes: list[NodeNG], context: InferenceContext | None = None, **kwargs: Any
+    ) -> Generator[InferenceResult, None, InferenceErrorInfo | None]:
+        if not nodes:
+            yield
+            return
+        if len(nodes) == 1:
+            yield from nodes[0]._infer(context, **kwargs)
+            return
+        uninferable_already_generated = False
+        for prefix in nodes[0]._infer(context, **kwargs):
+            for suffix in cls._infer_from_values(nodes[1:], context, **kwargs):
+                result = ""
+                for node in (prefix, suffix):
+                    if isinstance(node, Const):
+                        result += str(node.value)
+                        continue
+                    result += MISSING_VALUE
+                if MISSING_VALUE in result:
+                    if not uninferable_already_generated:
+                        uninferable_already_generated = True
+                        yield util.Uninferable
+                else:
+                    yield Const(result)
 
 
 class NamedExpr(_base_nodes.AssignTypeNode):
@@ -4918,7 +4990,7 @@ class EvaluatedObject(NodeNG):
 
     def _infer(
         self, context: InferenceContext | None = None, **kwargs: Any
-    ) -> Generator[NodeNG | util.UninferableBase, None, None]:
+    ) -> Generator[NodeNG | util.UninferableBase]:
         yield self.value
 
 

@@ -23,6 +23,7 @@ from astroid.interpreter._import import spec, util
 from astroid.modutils import (
     NoSourceFile,
     _cache_normalize_path_,
+    _has_init,
     file_info_from_modpath,
     get_source_file,
     is_module_name_part_of_extension_package_whitelist,
@@ -463,12 +464,15 @@ class AstroidManager:
         _invalidate_cache()  # inference context cache
 
         self.astroid_cache.clear()
+        self._mod_file_cache.clear()
+
         # NB: not a new TransformVisitor()
         AstroidManager.brain["_transform"].transforms = collections.defaultdict(list)
 
         for lru_cache in (
             LookupMixIn.lookup,
             _cache_normalize_path_,
+            _has_init,
             util.is_namespace,
             ObjectModel.attributes,
             ClassDef._metaclass_lookup_attribute,

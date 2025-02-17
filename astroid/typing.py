@@ -4,11 +4,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Generator
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
-    Generator,
     Generic,
     Protocol,
     TypedDict,
@@ -77,7 +76,7 @@ InferBinaryOp = Callable[
         "InferenceContext",
         SuccessfulInferenceResult,
     ],
-    Generator[InferenceResult, None, None],
+    Generator[InferenceResult],
 ]
 
 

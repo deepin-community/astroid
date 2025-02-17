@@ -3,16 +3,152 @@ astroid's ChangeLog
 ===================
 
 
-What's New in astroid 3.3.0?
+What's New in astroid 3.4.0?
 ============================
 Release date: TBA
 
+
+
+What's New in astroid 3.3.9?
+============================
+Release date: TBA
+
+
+
+What's New in astroid 3.3.8?
+============================
+Release date: 2024-12-23
+
+* Fix inability to import `collections.abc` in python 3.13.1. The reported fixes in astroid 3.3.6
+  and 3.3.7 did not actually fix this issue.
+
+  Closes pylint-dev/pylint#10112
+
+
+What's New in astroid 3.3.7?
+============================
+Release date: 2024-12-20
+
+This release was yanked.
+
+* Fix inability to import `collections.abc` in python 3.13.1. The reported fix in astroid 3.3.6
+  did not actually fix this issue.
+
+  Closes pylint-dev/pylint#10112
+
+
+What's New in astroid 3.3.6?
+============================
+Release date: 2024-12-08
+
+* Fix inability to import `collections.abc` in python 3.13.1.
+  _It was later found that this did not resolve the linked issue. It was fixed in astroid 3.3.7_
+
+  Closes pylint-dev/pylint#10112
+
+* Fix crash when typing._alias() call is missing arguments.
+
+  Closes #2513
+
+
+What's New in astroid 3.3.5?
+============================
+Release date: 2024-10-04
+
+* Control setting local nodes outside of the supposed local's constructor.
+
+  Closes #1490
+
+* Fix Python 3.13 compatibility re: `collections.abc`
+
+  Closes pylint-dev/pylint#10000
+
+
+What's New in astroid 3.3.4?
+============================
+Release date: 2024-09-23
+
+* Fix regression with f-string inference.
+
+  Closes pylint-dev/pylint#9947
+
+* Fix bug with ``manager.clear_cache()`` not fully clearing cache
+
+  Refs https://github.com/pylint-dev/pylint/pull/9932#issuecomment-2364985551
+
+* Fix a crash from inferring empty format specs.
+
+  Closes pylint-dev/pylint#9945
+
+
+What's New in astroid 3.3.3?
+============================
+Release date: 2024-09-20
+
+* Fix inference regression with property setters.
+
+  Closes pylint-dev/pylint#9811
+
+* Add annotation-only instance attributes to attrs classes to fix `no-member` false positives.
+
+  Closes #2514
+
+
+What's New in astroid 3.3.2?
+============================
+Release date: 2024-08-11
+
+* Restore support for soft-deprecated members of the ``typing`` module with python 3.13.
+
+  Refs pylint-dev/pylint#9852
+
+
+What's New in astroid 3.3.1?
+============================
+Release date: 2024-08-06
+
+* Fix a crash introduced in 3.3.0 involving invalid format strings.
+
+  Closes #2492
+
+
+What's New in astroid 3.3.0?
+============================
+Release date: 2024-08-04
+
+* Add support for Python 3.13.
+
+* Remove support for Python 3.8 (and constants `PY38`, `PY39_PLUS`, and `PYPY_7_3_11_PLUS`).
+
+  Refs #2443
+
+* Add the ``__annotations__`` attribute to the ``ClassDef`` object model.
+
+  Closes pylint-dev/pylint#7126
+
+* Implement inference for JoinedStr and FormattedValue
+
+* Add support for ``ssl.OP_LEGACY_SERVER_CONNECT`` (new in Python 3.12).
+
+  Closes pylint-dev/pylint#9849
+
+
+What's New in astroid 3.2.4?
+============================
+Release date: 2024-07-20
+
+* Avoid reporting unary/binary op type errors when inference is ambiguous.
+
+  Closes #2467
 
 
 What's New in astroid 3.2.3?
 ============================
-Release date: TBA
+Release date: 2024-07-11
 
+* Fix ``AssertionError`` when inferring a property consisting of a partial function.
+
+Closes pylint-dev/pylint#9214
 
 
 What's New in astroid 3.2.2?

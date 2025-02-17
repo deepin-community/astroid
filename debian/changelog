@@ -1,3 +1,51 @@
+astroid (3.3.8-2) unstable; urgency=medium
+
+  * Team upload.
+  * Remove runtime dep on python3-setuptools
+  * Set DPT as Maintainer per new Team Policy
+
+ -- Alexandre Detiste <tchet@debian.org>  Sun, 19 Jan 2025 14:15:07 +0100
+
+astroid (3.3.8-1) unstable; urgency=medium
+
+  * Team upload.
+  * New upstream release.
+
+ -- Colin Watson <cjwatson@debian.org>  Sat, 28 Dec 2024 23:47:24 +0000
+
+astroid (3.3.7-1) unstable; urgency=medium
+
+  * Team upload.
+  * New upstream release.
+
+ -- Colin Watson <cjwatson@debian.org>  Sat, 21 Dec 2024 23:36:28 +0000
+
+astroid (3.3.6-1) unstable; urgency=medium
+
+  * Team upload.
+  * New upstream release.
+
+ -- Colin Watson <cjwatson@debian.org>  Sun, 08 Dec 2024 18:16:59 +0000
+
+astroid (3.3.5-1) unstable; urgency=medium
+
+  * Team upload.
+  * New upstream release.
+  * Enable autopkgtest-pkg-pybuild.
+  * Breaks: pylint (<< 3.3.0); earlier versions of pylint have
+    inconsistent_quotes_fstring_py312 failures with this version of astroid.
+
+ -- Colin Watson <cjwatson@debian.org>  Fri, 11 Oct 2024 16:00:14 +0100
+
+astroid (3.3.2-1) unstable; urgency=medium
+
+  * New upstream version 3.3.2
+    + Thanks to Bruno Ribeiro for the MR.
+  * Add d/lintian-overrides
+    + Thanks to nicolas for the patch.
+
+ -- Daniel Echeverri <epsilon@debian.org>  Sun, 15 Sep 2024 21:06:25 -0500
+
 astroid (3.2.2-1) unstable; urgency=medium
 
   [ Alexandre Detiste ]

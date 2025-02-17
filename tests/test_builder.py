@@ -19,7 +19,7 @@ import unittest.mock
 import pytest
 
 from astroid import Instance, builder, nodes, test_utils, util
-from astroid.const import IS_PYPY, PY38, PY39_PLUS, PYPY_7_3_11_PLUS
+from astroid.const import IS_PYPY
 from astroid.exceptions import (
     AstroidBuildingError,
     AstroidSyntaxError,
@@ -57,10 +57,7 @@ class FromToLineNoTest(unittest.TestCase):
         self.assertIsInstance(strarg, nodes.Const)
         if IS_PYPY:
             self.assertEqual(strarg.fromlineno, 4)
-            if not PY39_PLUS:
-                self.assertEqual(strarg.tolineno, 4)
-            else:
-                self.assertEqual(strarg.tolineno, 5)
+            self.assertEqual(strarg.tolineno, 5)
         else:
             self.assertEqual(strarg.fromlineno, 4)
             self.assertEqual(strarg.tolineno, 5)
@@ -157,12 +154,7 @@ class FromToLineNoTest(unittest.TestCase):
 
         c = ast_module.body[2]
         assert isinstance(c, nodes.ClassDef)
-        if IS_PYPY and PY38 and not PYPY_7_3_11_PLUS:
-            # Not perfect, but best we can do for PyPy 3.8 (< v7.3.11).
-            # Can't detect closing bracket on new line.
-            assert c.fromlineno == 12
-        else:
-            assert c.fromlineno == 13
+        assert c.fromlineno == 13
         assert c.tolineno == 14
 
     @staticmethod
@@ -777,7 +769,7 @@ class FileBuildTest(unittest.TestCase):
         with self.assertRaises(StatementMissing):
             with pytest.warns(DeprecationWarning) as records:
                 self.assertEqual(module.statement(future=True), module)
-                assert len(records) == 1
+        assert len(records) == 1
         with self.assertRaises(StatementMissing):
             module.statement()
 
@@ -849,12 +841,13 @@ class FileBuildTest(unittest.TestCase):
         klass1 = module["YO"]
         locals1 = klass1.locals
         keys = sorted(locals1.keys())
-        assert_keys = ["__init__", "__module__", "__qualname__", "a"]
+        assert_keys = ["__annotations__", "__init__", "__module__", "__qualname__", "a"]
         self.assertEqual(keys, assert_keys)
         klass2 = module["YOUPI"]
         locals2 = klass2.locals
         keys = locals2.keys()
         assert_keys = [
+            "__annotations__",
             "__init__",
             "__module__",
             "__qualname__",
@@ -921,12 +914,6 @@ def test_module_build_dunder_file() -> None:
     assert module.path[0] == collections.__file__
 
 
-@pytest.mark.xfail(
-    reason=(
-        "The builtin ast module does not fail with a specific error "
-        "for syntax error caused by invalid type comments."
-    ),
-)
 def test_parse_module_with_invalid_type_comments_does_not_crash():
     node = builder.parse(
         """

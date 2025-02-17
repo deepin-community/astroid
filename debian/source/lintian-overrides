@@ -1,0 +1,5 @@
+# A zip file used as fake input during tests.
+very-long-line-length-in-source-file 1222 > 512 [tests/testdata/python3/data/MyPyPa-0.1.0-py2.5.egg:1]
+
+# Github provides no way to sign tarballs.
+debian-watch-does-not-check-openpgp-signature [debian/watch]

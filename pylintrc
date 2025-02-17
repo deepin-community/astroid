@@ -39,7 +39,7 @@ unsafe-load-any-extension=no
 extension-pkg-whitelist=
 
 # Minimum supported python version
-py-version = 3.8.0
+py-version = 3.9.0
 
 
 [REPORTS]
@@ -301,6 +301,9 @@ exclude-protected=_asdict,_fields,_replace,_source,_make
 # Maximum number of arguments for function / method
 max-args=10
 
+# Maximum number of positional arguments for function / method.
+max-positional-arguments=8
+
 # Argument names that match this expression will be ignored. Default to name
 
 # with leading underscore
@@ -348,6 +351,9 @@ ext-import-graph=
 # not be disabled)
 int-import-graph=
 
+# Force import order to recognize a module as part of the standard
+# compatibility libraries.
+known-standard-library=_io
 
 [EXCEPTIONS]
 

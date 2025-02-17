@@ -1,8 +1,8 @@
 Source: astroid
 Section: python
 Priority: optional
-Maintainer: Daniel Echeverri <epsilon@debian.org>
-Uploaders: Debian Python Team <team+python@tracker.debian.org>
+Maintainer: Debian Python Team <team+python@tracker.debian.org>
+Uploaders: Daniel Echeverri <epsilon@debian.org>,
 Build-Depends: debhelper-compat (= 13),
                dh-sequence-python3,
                pybuild-plugin-pyproject,
@@ -20,13 +20,14 @@ Rules-Requires-Root: no
 Homepage: https://github.com/pylint-dev/astroid
 Vcs-Git: https://salsa.debian.org/python-team/packages/astroid.git
 Vcs-Browser: https://salsa.debian.org/python-team/packages/astroid
+Testsuite: autopkgtest-pkg-pybuild
 
 Package: python3-astroid
 Architecture: all
-Depends: python3-setuptools,
-         python3-typing-extensions,
+Depends: python3-typing-extensions,
          ${misc:Depends},
          ${python3:Depends},
+Breaks: pylint (<< 3.3.0),
 Description: rebuild a new abstract syntax tree from Python's AST (Python3)
  The aim of this module is to provide a common base representation of
  Python source code for projects such as pychecker, pyreverse,
